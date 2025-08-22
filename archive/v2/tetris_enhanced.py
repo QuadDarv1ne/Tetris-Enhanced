@@ -7,7 +7,7 @@ TETRIS ENHANCED — итоговый файл проекта (на русско�
       - звуковые эффекты из папки sounds/ (rotate.wav, drop.wav, line.wav);
       - стартовое меню выбора уровня и трека;
       - меню паузы c кнопками Продолжить / Сохранить / Загрузить / Следующая / Предыдущая / Выйти;
-      - сохранение и загрузка состояния в JSON-файл (saves/tetris_save.json);
+      - сохранение и загрузка состояния в JSON-файл (tetris_save.json);
       - механика Hold, ghost-piece, комбо и back-to-back, базовая обработка T-Spin;
       - настраиваемые контролы: стрелки, Z/X/A/S, Space, C/Shift, P, R, Esc/Q.
 
@@ -18,12 +18,11 @@ TETRIS ENHANCED — итоговый файл проекта (на русско�
     3) Создайте папки рядом со скриптом:
          music/   - поместите mp3/ogg/wav треки
          sounds/  - поместите wav-файлы эффектов: rotate.wav, drop.wav, line.wav
-         saves/   - будет создана автоматически для сохранений
     4) Запустите:
          python tetris_enhanced.py
 
 Формат сохранения:
-    Состояние игры сохраняется в JSON в папке saves/ и содержит простые типы (grid, next_queue, bag, current, hold, score, level и т.д.).
+    Состояние игры сохраняется в JSON и содержит простые типы (grid, next_queue, bag, current, hold, score, level и т.д.).
     Это позволяет при необходимости вручную редактировать или переносить файл.
 
 Авторство и лицензия:
@@ -38,7 +37,7 @@ Enhanced Tetris (single-file) — pygame
 Улучшения по запросу пользователя:
  - Фоновая музыка (сканируется папка music/ для mp3/ogg/wav)
  - Простые звуковые эффекты (если есть файлы в ./sounds/)
- - Сохранение/загрузка игры в JSON (saves/tetris_save.json)
+ - Сохранение/загрузка игры в JSON (tetris_save.json)
  - Стартовое меню выбора уровня и музыкального трека
  - Меню паузы с кнопками: Продолжить, Сохранить, Загрузить, Следующая музыка, Предыдущая, Выйти
 
@@ -79,19 +78,11 @@ ORIGIN_Y = max(MARGIN, MARGIN + (HEIGHT - 2*MARGIN - PLAY_H) // 2)
 # Music directory scanning
 MUSIC_DIR = "music"
 MUSIC_FILES = []
-
-def scan_music_files(directory):
-    """Рекурсивно сканирует директорию в поисках музыкальных файлов."""
-    music_files = []
-    if os.path.isdir(directory):
-        for root, dirs, files in os.walk(directory):
-            for fname in sorted(files):
-                if fname.lower().endswith(('.mp3', '.ogg', '.wav')):
-                    music_files.append(os.path.join(root, fname))
-    return music_files
-
-MUSIC_FILES = scan_music_files(MUSIC_DIR)
-if not MUSIC_FILES:
+if os.path.isdir(MUSIC_DIR):
+    for fname in sorted(os.listdir(MUSIC_DIR)):
+        if fname.lower().endswith(('.mp3', '.ogg', '.wav')):
+            MUSIC_FILES.append(os.path.join(MUSIC_DIR, fname))
+else:
     # fallback to explicit list (kept for compatibility)
     MUSIC_FILES = [
         "Tetris - Коробейники(FamilyJules7X).mp3",
@@ -267,17 +258,7 @@ class InputState:
     # Обнаружение двойных нажатий
     last_down_press: float = 0.0
     last_space_press: float = 0.0
-    double_press_window: float = 0.18  # 180мс окно для двойного нажатия (более отзывчиво)
-    
-    # Отслеживание длительности нажатий для предотвращения случайных нажатий
-    key_press_start_times: dict = field(default_factory=dict)
-    short_press_threshold: float = 0.06  # 60мс для короткого нажатия (ещё быстрее)
-    long_press_threshold: float = 0.15   # 150мс для долгого нажатия (быстрее активация)
-    
-    # Улучшенная система контроля нажатий
-    key_hold_states: dict = field(default_factory=dict)  # Состояния удержания клавиш
-    last_action_time: dict = field(default_factory=dict)  # Время последнего действия для каждой клавиши
-    action_cooldown: float = 0.05  # 50мс кулдаун между действиями для предотвращения спама
+    double_press_window: float = 0.25
     
     # Состояние обычной гравитации
     gravity_timer: float = 0.0
@@ -293,10 +274,6 @@ class InputState:
         self.last_direction = None
         self.reset_falling_animation()
         self.gravity_timer = 0.0
-        # Очищаем информацию о длительности нажатий
-        self.key_press_start_times.clear()
-        self.key_hold_states.clear()
-        self.last_action_time.clear()
     
     def reset_falling_animation(self):
         """Сброс только состояний анимации падения."""
@@ -341,98 +318,6 @@ class InputState:
             self.last_space_press = current_time
             return False
         return False
-    
-    def start_key_press(self, key_name: str):
-        """Запуск отслеживания длительности нажатия клавиши."""
-        current_time = pygame.time.get_ticks() / 1000.0
-        self.key_press_start_times[key_name] = current_time
-    
-    def end_key_press(self, key_name: str) -> str:
-        """
-        Окончание нажатия клавиши и определение типа нажатия.
-        
-        Returns:
-            'short' для короткого нажатия, 'long' для долгого, 'medium' для среднего
-        """
-        current_time = pygame.time.get_ticks() / 1000.0
-        start_time = self.key_press_start_times.get(key_name, current_time)
-        duration = current_time - start_time
-        
-        # Удаляем запись о начале нажатия
-        if key_name in self.key_press_start_times:
-            del self.key_press_start_times[key_name]
-        
-        if duration < self.short_press_threshold:
-            return 'short'
-        elif duration > self.long_press_threshold:
-            return 'long'
-        else:
-            return 'medium'
-    
-    def get_key_press_duration(self, key_name: str) -> float:
-        """Получает текущую длительность нажатия клавиши."""
-        current_time = pygame.time.get_ticks() / 1000.0
-        start_time = self.key_press_start_times.get(key_name, current_time)
-        return current_time - start_time
-    
-    def is_long_press_active(self, key_name: str) -> bool:
-        """Проверяет, является ли текущее нажатие долгим."""
-        return self.get_key_press_duration(key_name) > self.long_press_threshold
-    
-    def can_perform_action(self, key_name: str) -> bool:
-        """Проверяет, можно ли выполнить действие для данной клавиши."""
-        current_time = pygame.time.get_ticks() / 1000.0
-        last_action = self.last_action_time.get(key_name, 0.0)
-        return current_time - last_action >= self.action_cooldown
-    
-    def mark_action_performed(self, key_name: str):
-        """Отмечает, что действие для клавиши было выполнено."""
-        current_time = pygame.time.get_ticks() / 1000.0
-        self.last_action_time[key_name] = current_time
-    
-    def get_press_intent(self, key_name: str) -> str:
-        """
-        Определяет намерение нажатия клавиши на основе длительности.
-        
-        Returns:
-            'tap' - короткое нажатие (лёгкое касание)
-            'press' - среднее нажатие (осознанное действие)
-            'hold' - долгое нажатие (удержание)
-        """
-        duration = self.get_key_press_duration(key_name)
-        if duration < self.short_press_threshold:
-            return 'tap'
-        elif duration < self.long_press_threshold:
-            return 'press' 
-        else:
-            return 'hold'
-    
-    def start_enhanced_smooth_fall(self, base_speed: float, intent: str, is_double: bool = False):
-        """
-        Запускает улучшенное плавное падение с адаптивной скоростью.
-        
-        Args:
-            base_speed: Базовая скорость
-            intent: Намерение нажатия ('tap', 'press', 'hold')
-            is_double: Является ли двойным нажатием
-        """
-        # Модификаторы скорости на основе намерения
-        intent_multipliers = {
-            'tap': 1.0,     # Минимальная скорость для лёгкого касания
-            'press': 1.5,   # Средняя скорость для осознанного нажатия
-            'hold': 2.0     # Максимальная скорость для удержания
-        }
-        
-        final_speed = base_speed * intent_multipliers.get(intent, 1.0)
-        if is_double:
-            final_speed *= 1.8  # Дополнительный буст для двойного нажатия
-        
-        current_time = pygame.time.get_ticks() / 1000.0
-        self.smooth_fall_active = True
-        self.smooth_fall_speed = final_speed
-        self.smooth_fall_timer = 0.0
-        self.smooth_fall_double_press = is_double
-        self.smooth_fall_start_time = current_time
 
 @dataclass
 class Piece:
@@ -942,8 +827,14 @@ class AudioManager:
             pygame.mixer.init()
         except Exception:
             pass
-        # Используем уже просканированный список музыкальных файлов
+        # build playlist from MUSIC_FILES (already scanned)
         self.playlist = [f for f in MUSIC_FILES if os.path.isfile(f)]
+        # if paths are relative inside 'music', resolve them
+        if not self.playlist and os.path.isdir(MUSIC_DIR):
+            for fname in sorted(os.listdir(MUSIC_DIR)):
+                path = os.path.join(MUSIC_DIR, fname)
+                if path.lower().endswith(('.mp3', '.ogg', '.wav')) and os.path.isfile(path):
+                    self.playlist.append(path)
         self.index = 0
         self.enabled = len(self.playlist) > 0
         pygame.mixer.music.set_endevent(MUSIC_END_EVENT)
@@ -1104,36 +995,28 @@ def draw_mini(surf, origin_x, origin_y, kind: Optional[str], small):
 
 # -------------------- Save / Load --------------------
 
-SAVE_FILE = 'saves/tetris_save.json'
-SAVE_DIR = 'saves'
-
-def ensure_save_directory():
-    """Создаёт папку saves, если её нет."""
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
-        print(f'Создана папка для сохранений: {SAVE_DIR}')
+SAVE_FILE = 'tetris_save.json'
 
 def save_game(state: GameState, filename: str = SAVE_FILE):
     try:
-        ensure_save_directory()  # Убеждаемся, что папка существует
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
-        print('Игра сохранена в', filename)
+        print('Game saved to', filename)
     except Exception as e:
-        print('Ошибка сохранения:', e)
+        print('Failed to save:', e)
 
 def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
     if not os.path.isfile(filename):
-        print('Файл сохранения не найден:', filename)
+        print('Save file not found')
         return None
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             d = json.load(f)
         state = GameState.from_dict(d)
-        print('Игра загружена из', filename)
+        print('Game loaded from', filename)
         return state
     except Exception as e:
-        print('Ошибка загрузки:', e)
+        print('Failed to load:', e)
         return None
 
 # -------------------- Menus --------------------
@@ -1281,8 +1164,8 @@ def run():
 
     # Используем класс InputState вместо локальных переменных
     input_state = InputState()
-    das = 0.12  # Увеличиваем задержку для менее чувствительного управления влево/вправо
-    arr = 0.035  # Увеличиваем интервал повтора для более медленного автоповтора
+    das = 0.12
+    arr = 0.03
 
     while True:
         dt = clock.tick(FPS) / 1000.0
@@ -1324,17 +1207,18 @@ def run():
                     if try_move(state, +1, 0):
                         audio.play_sfx('rotate')
                 elif ev.key == pygame.K_DOWN:
-                    # Оптимизированная обработка кнопки вниз
-                    if input_state.can_perform_action('down'):
-                        input_state.start_key_press('down')
-                        input_state.down = True
-                        input_state.down_activated_for_current_piece = True
-                        input_state.mark_action_performed('down')
-                        
-                        # Немедленная обратная связь - лёгкое мовение вниз
-                        if try_move(state, 0, 1):
-                            state.score += 1
-                            audio.play_sfx('rotate')  # Лёгкий звук обратной связи
+                    # Проверяем двойное нажатие и активируем кнопку для текущей фигуры
+                    is_double = input_state.is_double_press('down')
+                    input_state.down = True
+                    input_state.down_activated_for_current_piece = True
+                    
+                    if is_double:
+                        # Двойное нажатие - 4x скорость
+                        input_state.start_smooth_fall(4.0, True)
+                        audio.play_sfx('rotate')
+                    else:
+                        # Одиночное нажатие - 2x скорость
+                        input_state.start_smooth_fall(2.0, False)
                 elif ev.key in (pygame.K_UP, pygame.K_z):
                     ok, tspin = try_rotate(state, +1)
                     if ok:
@@ -1348,10 +1232,28 @@ def run():
                     if ok:
                         audio.play_sfx('rotate')
                 elif ev.key == pygame.K_SPACE:
-                    # Оптимизированная обработка пробела
-                    if input_state.can_perform_action('space'):
-                        input_state.start_key_press('space')
-                        input_state.mark_action_performed('space')
+                    # Проверяем двойное нажатие
+                    is_double = input_state.is_double_press('space')
+                    
+                    if is_double:
+                        # Двойное нажатие - быстрое жёсткое падение
+                        if state.current is not None and not state.hard_drop_anim:
+                            d = hard_drop_distance(state)
+                            if d > 0:
+                                current_time = pygame.time.get_ticks() / 1000.0
+                                start_y = state.current.y
+                                target_y = state.current.y + d
+                                duration = min(0.15, 0.015 + 0.005 * d)
+                                state.hard_drop_anim = True
+                                state.hard_drop_start_y = start_y
+                                state.hard_drop_target_y = target_y
+                                state.hard_drop_duration = duration
+                                state.hard_drop_start_time = current_time
+                                state.score += 2 * d
+                                audio.play_sfx('drop')
+                    else:
+                        # Одиночное нажатие - плавное падение
+                        input_state.start_smooth_fall(5.0, False)
                 elif ev.key in (pygame.K_c, pygame.K_LSHIFT, pygame.K_RSHIFT):
                     hold_swap(state)
             elif ev.type == pygame.KEYUP:
@@ -1360,90 +1262,10 @@ def run():
                 elif ev.key == pygame.K_RIGHT:
                     input_state.right = False
                 elif ev.key == pygame.K_DOWN:
-                    # Улучшенная обработка отпускания кнопки вниз
-                    intent = input_state.get_press_intent('down')
-                    press_type = input_state.end_key_press('down')
                     input_state.down = False
-                    
-                    # Определяем действие на основе намерения и длительности
-                    if intent == 'tap':
-                        # Короткое касание - минимальная активность
-                        is_double = input_state.is_double_press('down')
-                        if is_double:
-                            input_state.start_enhanced_smooth_fall(2.5, intent, True)
-                            audio.play_sfx('rotate')
-                        # Одиночное короткое касание - ничего не делаем
-                        
-                    elif intent == 'press':
-                        # Осознанное нажатие - обычное плавное падение
-                        is_double = input_state.is_double_press('down')
-                        input_state.start_enhanced_smooth_fall(3.5, intent, is_double)
-                        if is_double:
-                            audio.play_sfx('rotate')
-                            
-                    elif intent == 'hold':
-                        # Долгое удержание - быстрое плавное падение
-                        is_double = input_state.is_double_press('down')
-                        input_state.start_enhanced_smooth_fall(5.0, intent, is_double)
-                        if is_double:
-                            audio.play_sfx('rotate')
-                    
-                    # Останавливаем плавное падение при отпускании клавиши (только для не-двойных)
+                    # Останавливаем плавное падение при отпускании клавиши
                     if input_state.smooth_fall_active and not input_state.smooth_fall_double_press:
                         input_state.reset_falling_animation()
-                elif ev.key == pygame.K_SPACE:
-                    # Улучшенная обработка отпускания пробела
-                    intent = input_state.get_press_intent('space')
-                    press_type = input_state.end_key_press('space')
-                    
-                    if intent == 'tap':
-                        # Короткое касание - мягкое плавное падение
-                        is_double = input_state.is_double_press('space')
-                        if is_double:
-                            input_state.start_enhanced_smooth_fall(3.0, 'press', True)  # Уменьшаем с 6.0 до 3.0
-                            audio.play_sfx('rotate')
-                        else:
-                            input_state.start_enhanced_smooth_fall(2.5, 'press', False)  # Уменьшаем с 4.5 до 2.5
-                            
-                    elif intent == 'press':
-                        # Осознанное нажатие - умеренное жёсткое падение
-                        is_double = input_state.is_double_press('space')
-                        if is_double:
-                            # Двойное среднее - быстрое жёсткое падение
-                            if state.current is not None and not state.hard_drop_anim:
-                                d = hard_drop_distance(state)
-                                if d > 0:
-                                    current_time = pygame.time.get_ticks() / 1000.0
-                                    start_y = state.current.y
-                                    target_y = state.current.y + d
-                                    duration = min(0.20, 0.015 + 0.005 * d)  # Увеличиваем длительность анимации
-                                    state.hard_drop_anim = True
-                                    state.hard_drop_start_y = start_y
-                                    state.hard_drop_target_y = target_y
-                                    state.hard_drop_duration = duration
-                                    state.hard_drop_start_time = current_time
-                                    state.score += 2 * d
-                                    audio.play_sfx('drop')
-                        else:
-                            # Одиночное среднее - плавное падение
-                            input_state.start_enhanced_smooth_fall(4.5, intent, False)  # Уменьшаем с 6.0 до 4.5
-                            
-                    elif intent == 'hold':
-                        # Долгое удержание - максимально быстрое жёсткое падение
-                        if state.current is not None and not state.hard_drop_anim:
-                            d = hard_drop_distance(state)
-                            if d > 0:
-                                current_time = pygame.time.get_ticks() / 1000.0
-                                start_y = state.current.y
-                                target_y = state.current.y + d
-                                duration = min(0.12, 0.008 + 0.002 * d)  # Увеличиваем с очень быстрой до быстрой
-                                state.hard_drop_anim = True
-                                state.hard_drop_start_y = start_y
-                                state.hard_drop_target_y = target_y
-                                state.hard_drop_duration = duration
-                                state.hard_drop_start_time = current_time
-                                state.score += 2 * d
-                                audio.play_sfx('drop')
 
         if state.game_over:
             screen.fill(BG)
@@ -1468,15 +1290,15 @@ def run():
         # Smooth falling animation handling
         if input_state.smooth_fall_active and state.current is not None:
             input_state.smooth_fall_timer += dt
-            enhanced_gravity = state.fall_interval / (input_state.smooth_fall_speed * 15.0)  # Увеличиваем плавность для лучшей отзывчивости
+            enhanced_gravity = state.fall_interval / (input_state.smooth_fall_speed * 8.0)
             
             while input_state.smooth_fall_timer >= enhanced_gravity:
                 input_state.smooth_fall_timer -= enhanced_gravity
                 moved = try_move(state, 0, +1)
                 if moved:
-                    state.score += 1  # Начисляем очки за ручное падение
+                    state.score += 1  # Award points for manual falling
                 else:
-                    # Останавливаем плавное падение при закреплении фигуры
+                    # Stop smooth falling when piece locks
                     input_state.reset_falling_animation()
                     cleared = lock_piece(state)
                     if cleared > 0:
@@ -1484,12 +1306,10 @@ def run():
                         score_lines(state, cleared, 'none')
                     break
             
-            # Автоматическая остановка плавного падения через разумное время
+            # Auto-stop smooth falling after reasonable time for double-press
             if input_state.smooth_fall_double_press:
                 current_time = pygame.time.get_ticks() / 1000.0
-                # Оптимизированное время остановки для более отзывчивого управления
-                timeout = 0.7 if input_state.smooth_fall_speed > 4.0 else 1.0
-                if current_time - input_state.smooth_fall_start_time > timeout:
+                if current_time - input_state.smooth_fall_start_time > 1.5:
                     input_state.reset_falling_animation()
 
         # Hard-drop animation handling
@@ -1536,23 +1356,15 @@ def run():
         # Normal gravity (only if not in special animation modes)
         if not input_state.smooth_fall_active and not getattr(state, 'hard_drop_anim', False):
             gravity = state.fall_interval
-            # Улучшенное традиционное мягкое падение
-            if (input_state.down and input_state.down_activated_for_current_piece):
-                current_duration = input_state.get_key_press_duration('down')
-                if current_duration >= input_state.short_press_threshold:
-                    # Адаптивное ускорение на основе длительности нажатия
-                    if current_duration < input_state.long_press_threshold:
-                        gravity = gravity / 7.0  # Средняя скорость
-                    else:
-                        gravity = gravity / 13.0  # Быстрая скорость для долгого удержания
-            
+            # Традиционное мягкое падение только если кнопка активирована
+            if input_state.down and input_state.down_activated_for_current_piece:
+                gravity = gravity / 20.0
             input_state.gravity_timer += dt
             while input_state.gravity_timer >= gravity:
                 input_state.gravity_timer -= gravity
                 moved = try_move(state, 0, +1)
                 if moved:
-                    if (input_state.down and input_state.down_activated_for_current_piece and 
-                        input_state.get_key_press_duration('down') >= input_state.short_press_threshold):
+                    if input_state.down and input_state.down_activated_for_current_piece:
                         state.score += 1
                 else:
                     # lock
