@@ -465,6 +465,20 @@ def is_t_spin(state: GameState, piece: Piece, kicked: bool) -> str:
     return 'none'
 
 def score_lines(state: GameState, lines: int, tspin: str):
+    """
+    Начисляет очки за очищенные линии и обновляет статистику игры.
+    
+    Очки зависят от:
+    - Количества очищенных линий
+    - Наличия T-спина
+    - Комбо (последовательные очистки)
+    - Back-to-Back бонуса (за тетрисы и T-спины подряд)
+    
+    Args:
+        state: Текущее состояние игры
+        lines: Количество очищенных линий
+        tspin: Тип T-спина ('tspin' или 'none')
+    """
     pts = 0
     if tspin != 'none':
         if lines == 1:
@@ -506,6 +520,18 @@ def score_lines(state: GameState, lines: int, tspin: str):
     state.score += pts
 
 def clear_lines(state: GameState) -> int:
+    """
+    Очищает все заполненные линии с игрового поля.
+    
+    Удаляет все строки, где все клетки заняты,
+    а сверху добавляет пустые строки.
+    
+    Args:
+        state: Текущее состояние игры
+        
+    Returns:
+        Количество очищенных линий
+    """
     new_grid = [row for row in state.grid if any(cell is None for cell in row)]
     cleared = PLAY_ROWS - len(new_grid)
     while len(new_grid) < PLAY_ROWS:
@@ -514,11 +540,29 @@ def clear_lines(state: GameState) -> int:
     return cleared
 
 def refill_bag(state: GameState):
+    """
+    Пополняет мешок с типами тетромино.
+    
+    Использует систему "7-bag" - в каждом мешке есть 
+    ровно одна фигура каждого типа, перемешанные случайно.
+    
+    Args:
+        state: Текущее состояние игры
+    """
     bag = list(SHAPES.keys())
     random.shuffle(bag)
     state.bag.extend(bag)
 
 def spawn_next(state: GameState):
+    """
+    Создает новую падающую фигуру из очереди.
+    
+    Заполняет очередь следующих фигур до 5 элементов
+    и берёт первую для создания текущей фигуры.
+    
+    Args:
+        state: Текущее состояние игры
+    """
     while len(state.next_queue) < 5:
         if not state.bag:
             refill_bag(state)
@@ -530,6 +574,17 @@ def spawn_next(state: GameState):
     state.current = piece
 
 def try_move(state: GameState, dx: int, dy: int) -> bool:
+    """
+    Пытается сдвинуть текущую фигуру на указанное расстояние.
+    
+    Args:
+        state: Текущее состояние игры
+        dx: Сдвиг по оси X (столбцам)
+        dy: Сдвиг по оси Y (строкам)
+        
+    Returns:
+        True, если движение возможно, иначе False
+    """
     if state.current is None:
         return False
     p = Piece(state.current.kind, state.current.x + dx, state.current.y + dy, state.current.r)
@@ -539,6 +594,19 @@ def try_move(state: GameState, dx: int, dy: int) -> bool:
     return False
 
 def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
+    """
+    Пытается повернуть текущую фигуру с проверкой wall kick'ов.
+    
+    Использует систему SRS (Super Rotation System) для
+    попыток поворота в нескольких позициях.
+    
+    Args:
+        state: Текущее состояние игры
+        dr: Направление поворота (+1 по часовой, -1 против)
+        
+    Returns:
+        Кортеж (удалось ли повернуть, тип T-спина)
+    """
     cur = state.current
     if cur is None:
         return False, 'none'
@@ -554,6 +622,18 @@ def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
     return False, 'none'
 
 def hard_drop_distance(state: GameState) -> int:
+    """
+    Вычисляет расстояние для быстрого падения текущей фигуры.
+    
+    Определяет, на сколько клеток вниз можно опустить
+    фигуру до столкновения.
+    
+    Args:
+        state: Текущее состояние игры
+        
+    Returns:
+        Количество клеток до приземления
+    """
     if state.current is None:
         return 0
     dist = 0
@@ -566,11 +646,33 @@ def hard_drop_distance(state: GameState) -> int:
     return dist
 
 def ghost_position(state: GameState) -> Piece:
+    """
+    Создает "призрачную" копию текущей фигуры в позиции приземления.
+    
+    Показывает игроку, где приземлится фигура
+    при быстром падении.
+    
+    Args:
+        state: Текущее состояние игры
+        
+    Returns:
+        Копия текущей фигуры в позиции приземления
+    """
     d = hard_drop_distance(state)
     p = state.current
     return Piece(p.kind, p.x, p.y + d, p.r)
 
 def hold_swap(state: GameState):
+    """
+    Выполняет обмен текущей фигуры с зафиксированной (Hold).
+    
+    Механика Hold позволяет сохранить текущую фигуру
+    на потом и использовать её позже.
+    Можно использовать только один раз на каждую фигуру.
+    
+    Args:
+        state: Текущее состояние игры
+    """
     if state.current is None or not state.can_hold:
         return
     cur_kind = state.current.kind
@@ -589,6 +691,20 @@ def hold_swap(state: GameState):
 MUSIC_END_EVENT = pygame.USEREVENT + 1
 
 class AudioManager:
+    """
+    Менеджер аудиосистемы для воспроизведения музыки и звуковых эффектов.
+    
+    Обрабатывает:
+    - Фоновую музыку (плейлист mp3/ogg/wav файлов)
+    - Звуковые эффекты (поворот, падение, очистка линий)
+    - Переключение между треками
+    
+    Attributes:
+        playlist: Список путей к музыкальным файлам
+        index: Индекс текущего трека
+        enabled: Включена ли аудиосистема
+        sounds: Словарь загруженных звуковых эффектов
+    """
     def __init__(self):
         # initialize mixer safely
         try:
@@ -623,6 +739,10 @@ class AudioManager:
             pass
 
     def play_current(self):
+        """
+        Воспроизводит текущий трек из плейлиста.
+        Обрабатывает ошибки загрузки файлов.
+        """
         if not self.enabled:
             return
         path = self.playlist[self.index]
