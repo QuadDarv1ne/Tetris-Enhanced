@@ -437,6 +437,20 @@ def lock_piece(state: GameState):
     return cleared
 
 def is_t_spin(state: GameState, piece: Piece, kicked: bool) -> str:
+    """
+    Определяет, является ли последний поворот T-спином.
+    
+    T-спин - это особый тип поворота T-тетромино,
+    когда он зажат с трех сторон и дает дополнительные очки.
+    
+    Args:
+        state: Текущее состояние игры
+        piece: T-тетромино для проверки
+        kicked: Был ли поворот выполнен с киком (wall kick)
+        
+    Returns:
+        'tspin' если это T-спин, 'none' в противном случае
+    """
     if piece.kind != 'T':
         return 'none'
     corners = [(piece.x, piece.y), (piece.x+2, piece.y), (piece.x, piece.y+2), (piece.x+2, piece.y+2)]
