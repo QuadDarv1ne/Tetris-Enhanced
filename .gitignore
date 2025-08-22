@@ -1,0 +1,48 @@
+# Скомпилированные байт-коды / оптимизированные / DLL-файлы
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Виртуальные окружения
+venv/
+env/
+ENV/
+.venv/
+
+# Папки сборки / упаковки
+build/
+dist/
+*.egg-info/
+
+# Конфиги и файлы IDE/редакторов
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Системные файлы (macOS/Windows)
+.DS_Store
+Thumbs.db
+
+# Логи и базы данных
+*.log
+*.sqlite3
+
+# Локальные пользовательские файлы
+*.swp
+
+# Файлы сохранения и временные runtime-файлы
+tetris_save.json
+*.save
+
+# Музыка и звуковые ресурсы (не коммитить большие бинарные файлы)
+music/
+sounds/
+*.mp3
+*.ogg
+*.wav
+
+# Файлы, создаваемые ОС
+Icon?
+ehthumbs.db
+Desktop.ini
