@@ -190,9 +190,27 @@ KICKS = {
 
 # -------------------- Utility --------------------
 def rotate_shape(grid: List[str]) -> List[str]:
+    """
+    Поворачивает матрицу 4x4 на 90 градусов по часовой стрелке.
+    
+    Args:
+        grid: Список строк, представляющий матрицу 4x4
+        
+    Returns:
+        Повернутая матрица 4x4 как список строк
+    """
     return [''.join([grid[3 - c][r] for c in range(4)]) for r in range(4)]
 
 def build_rotations(kind: str) -> List[List[str]]:
+    """
+    Создает все уникальные состояния поворота для указанного типа тетромино.
+    
+    Args:
+        kind: Тип тетромино ('I', 'O', 'T', 'S', 'Z', 'J', 'L')
+        
+    Returns:
+        Список всех уникальных состояний поворота для данного типа
+    """
     base = SHAPES[kind][0]
     rots = [base]
     for _ in range(3):
@@ -211,6 +229,15 @@ ROTATED = {k: build_rotations(k) for k in SHAPES.keys()}
 
 @dataclass
 class Piece:
+    """
+    Класс, представляющий тетромино (фигуру) на игровом поле.
+    
+    Attributes:
+        kind: Тип тетромино ('I', 'O', 'T', 'S', 'Z', 'J', 'L')
+        x: Позиция по оси X (столбец)
+        y: Позиция по оси Y (строка)
+        r: Состояние поворота (0-3)
+    """
     kind: str
     x: int
     y: int
@@ -218,9 +245,21 @@ class Piece:
 
     @property
     def grid(self) -> List[str]:
+        """
+        Возвращает матрицу 4x4 для текущего состояния поворота.
+        
+        Returns:
+            Матрица 4x4 как список строк
+        """
         return ROTATED[self.kind][self.r % len(ROTATED[self.kind])]
 
     def cells(self) -> List[Tuple[int, int]]:
+        """
+        Возвращает список координат всех занятых клеток тетромино.
+        
+        Returns:
+            Список кортежей (x, y) для каждой занятой клетки
+        """
         cells = []
         g = self.grid
         for j in range(4):
@@ -231,6 +270,34 @@ class Piece:
 
 @dataclass
 class GameState:
+    """
+    Класс, представляющий полное состояние игры Тетрис.
+    
+    Содержит всю информацию о текущем состоянии игры:
+    стакан с заполненными клетками, текущую фигуру,
+    очки, уровень, статистику и т.д.
+    
+    Attributes:
+        grid: Игровой стакан 20x10 клеток
+        bag: Мешок с типами тетромино для генерации
+        next_queue: Очередь следующих фигур
+        hold: Тип зафиксированной фигуры (Hold)
+        can_hold: Можно ли использовать Hold
+        current: Текущая падающая фигура
+        score: Очки игрока
+        lines: Количество убранных линий
+        level: Текущий уровень
+        combo: Количество последовательных очисток линий
+        back_to_back: Флаг Back-to-Back бонуса
+        game_over: Закончена ли игра
+        paused: Поставлена ли игра на паузу
+        fall_interval: Интервал между падениями фигур (гравитация)
+        hard_drop_anim: Флаг анимации быстрого падения
+        hard_drop_start_y: Начальная Y-позиция для анимации быстрого падения
+        hard_drop_target_y: Конечная Y-позиция для анимации быстрого падения
+        hard_drop_duration: Продолжительность анимации быстрого падения
+        hard_drop_start_time: Время начала анимации быстрого падения
+    """
     grid: List[List[Optional[str]]] = field(default_factory=lambda: [[None for _ in range(PLAY_COLS)] for _ in range(PLAY_ROWS)])
     bag: List[str] = field(default_factory=list)
     next_queue: List[str] = field(default_factory=list)
@@ -253,6 +320,12 @@ class GameState:
     hard_drop_start_time: float = 0.0
 
     def to_dict(self):
+        """
+        Преобразует состояние игры в словарь для сохранения в JSON.
+        
+        Returns:
+            Словарь с всеми полями состояния игры
+        """
         return {
             'grid': [[cell if cell is not None else None for cell in row] for row in self.grid],
             'bag': list(self.bag),
@@ -270,6 +343,15 @@ class GameState:
 
     @staticmethod
     def from_dict(d):
+        """
+        Создает объект GameState из словаря (загрузка из JSON).
+        
+        Args:
+            d: Словарь с данными состояния игры
+            
+        Returns:
+            Новый объект GameState с загруженными данными
+        """
         s = GameState()
         s.grid = [[cell if cell is not None else None for cell in row] for row in d.get('grid', s.grid)]
         s.bag = d.get('bag', [])
@@ -290,12 +372,40 @@ class GameState:
 
 # -------------------- Core game logic --------------------
 def gravity_for_level(level: int) -> float:
+    """
+    Вычисляет скорость падения фигур для указанного уровня.
+    
+    Args:
+        level: Уровень сложности (1 и выше)
+        
+    Returns:
+        Интервал в секундах между падениями фигур
+    """
     return max(0.05, 0.8 * (0.9 ** (level - 1)))
 
 def spawn_x(kind: str) -> int:
+    """
+    Определяет начальную X-позицию для новой фигуры.
+    
+    Args:
+        kind: Тип тетромино
+        
+    Returns:
+        X-координата для спауна фигуры
+    """
     return 3 if kind != 'I' else 3
 
 def collides(state: GameState, piece: Piece) -> bool:
+    """
+    Проверяет, сталкивается ли фигура с границами стакана или другими фигурами.
+    
+    Args:
+        state: Текущее состояние игры
+        piece: Фигура для проверки
+        
+    Returns:
+        True, если есть столкновение, иначе False
+    """
     for x, y in piece.cells():
         if x < 0 or x >= PLAY_COLS or y >= PLAY_ROWS:
             return True
@@ -304,6 +414,15 @@ def collides(state: GameState, piece: Piece) -> bool:
     return False
 
 def lock_piece(state: GameState):
+    """
+    Фиксирует текущую фигуру на стакане и очищает заполненные линии.
+    
+    Args:
+        state: Текущее состояние игры
+        
+    Returns:
+        Количество очищенных линий
+    """
     if state.current is None:
         return 0
     for x, y in state.current.cells():
