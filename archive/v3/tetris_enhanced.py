@@ -54,7 +54,6 @@ import sys
 import json
 import random
 import time
-import math
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 from enum import Enum
@@ -183,11 +182,11 @@ CAMPAIGN_LEVELS = [
         unlocked=False
     )
 ]
-WIDTH, HEIGHT = 1024, 768 # Размер экрана (Возможно сделать - HD, FullHD, 2K, 4K)
-PLAY_COLS, PLAY_ROWS = 10, 20 
-BLOCK = 32 # Размер блока
+WIDTH, HEIGHT = 1024, 768
+PLAY_COLS, PLAY_ROWS = 10, 20
+BLOCK = 32
 PLAY_W, PLAY_H = PLAY_COLS * BLOCK, PLAY_ROWS * BLOCK
-MARGIN = 20 
+MARGIN = 20
 PANEL_W = WIDTH - PLAY_W - MARGIN * 3
 FPS = 60
 
@@ -227,94 +226,25 @@ if not MUSIC_FILES:
 # Sound effects (optional). Put wav files into ./sounds/ named: rotate.wav, drop.wav, line.wav
 SOUNDS_DIR = "sounds"
 
-# Colors - Современная цветовая схема
-BLACK = (15, 15, 18)
-BG = (20, 20, 25)  # Более глубокий фон
-BG_GRADIENT_TOP = (25, 25, 32)
-BG_GRADIENT_BOTTOM = (15, 15, 20)
-GRID = (45, 45, 55)
-WHITE = (245, 245, 250)
-DIM = (160, 165, 180)
-GHOST = (100, 105, 120)
+# Colors
+BLACK = (18, 18, 20)
+BG = (24, 24, 28)
+GRID = (40, 40, 48)
+WHITE = (240, 240, 250)
+DIM = (180, 180, 200)
+GHOST = (120, 120, 140)
+BUTTON_BG = (40, 40, 45)
+BUTTON_BORDER = (10, 10, 12)
 
-# UI Элементы
-BUTTON_BG = (35, 40, 50)
-BUTTON_BG_HOVER = (45, 55, 70)
-BUTTON_BG_ACTIVE = (55, 70, 90)
-BUTTON_BORDER = (80, 90, 110)
-BUTTON_BORDER_HOVER = (120, 140, 170)
-BUTTON_TEXT = (220, 225, 235)
-BUTTON_TEXT_HOVER = (255, 255, 255)
-
-# Акцентные цвета
-ACCENT_PRIMARY = (64, 156, 255)    # Синий
-ACCENT_SECONDARY = (138, 43, 226)  # Фиолетовый
-ACCENT_SUCCESS = (40, 200, 120)    # Зеленый
-ACCENT_WARNING = (255, 193, 7)     # Желтый
-ACCENT_DANGER = (220, 53, 69)      # Красный
-
-# Панели и контейнеры
-PANEL_BG = (28, 32, 40)
-PANEL_BORDER = (60, 68, 80)
-PANEL_SHADOW = (8, 8, 12)
-
-# Игровое поле
-PLAYFIELD_BG = (22, 26, 34)
-PLAYFIELD_BORDER = (55, 65, 80)
-PLAYFIELD_GRID = (35, 40, 50)
-
-# Tetromino colors - Красивая насыщенная палитра (I, O, T, S, Z, J, L)
+# Tetromino colors (I, O, T, S, Z, J, L)
 COLORS = {
-    'I': (0, 220, 255),      # Яркий неоново-голубой
-    'O': (255, 215, 0),      # Насыщенный золотой
-    'T': (155, 89, 182),     # Элегантный фиолетовый
-    'S': (46, 204, 113),     # Изумрудно-зеленый
-    'Z': (231, 76, 60),      # Алый красный
-    'J': (52, 152, 219),     # Глубокий синий
-    'L': (255, 127, 39),     # Сочный оранжевый
-}
-
-# Тёмные варианты для теней и границ - более контрастные
-COLORS_DARK = {
-    'I': (0, 160, 200),
-    'O': (200, 165, 0),
-    'T': (120, 60, 140),
-    'S': (30, 155, 85),
-    'Z': (180, 50, 40),
-    'J': (35, 115, 170),
-    'L': (200, 95, 25),
-}
-
-# Светлые варианты для бликов - более яркие и насыщенные
-COLORS_LIGHT = {
-    'I': (120, 240, 255),
-    'O': (255, 245, 120),
-    'T': (200, 150, 220),
-    'S': (120, 245, 160),
-    'Z': (255, 140, 120),
-    'J': (120, 190, 255),
-    'L': (255, 180, 120),
-}
-
-# Дополнительные цвета для создания красивых градиентов
-COLORS_GRADIENT_TOP = {
-    'I': (80, 245, 255),     # Светло-голубой верх
-    'O': (255, 240, 80),     # Светло-золотой верх
-    'T': (190, 130, 220),    # Светло-фиолетовый верх
-    'S': (80, 230, 140),     # Светло-зеленый верх
-    'Z': (255, 120, 100),    # Светло-красный верх
-    'J': (90, 180, 245),     # Светло-синий верх
-    'L': (255, 170, 80),     # Светло-оранжевый верх
-}
-
-COLORS_GRADIENT_BOTTOM = {
-    'I': (0, 180, 220),      # Темно-голубой низ
-    'O': (220, 180, 0),      # Темно-золотой низ
-    'T': (120, 60, 150),     # Темно-фиолетовый низ
-    'S': (30, 160, 90),      # Темно-зеленый низ
-    'Z': (190, 40, 30),      # Темно-красный низ
-    'J': (30, 120, 180),     # Темно-синий низ
-    'L': (210, 100, 20),     # Темно-оранжевый низ
+    'I': (0, 186, 255),
+    'O': (255, 214, 0),
+    'T': (175, 96, 234),
+    'S': (0, 200, 120),
+    'Z': (230, 30, 80),
+    'J': (0, 120, 255),
+    'L': (255, 140, 0),
 }
 
 # Shapes are 4x4 matrices
@@ -669,7 +599,8 @@ class GameState:
     Класс, представляющий полное состояние игры Тетрис.
     
     Содержит всю информацию о текущем состоянии игры:
-    стакан с заполненными клетками, текущую фигуру, очки, уровень, статистику и т.д.
+    стакан с заполненными клетками, текущую фигуру,
+    очки, уровень, статистику и т.д.
     
     Attributes:
         grid: Игровой стакан 20x10 клеток
@@ -879,7 +810,8 @@ def is_t_spin(state: GameState, piece: Piece, kicked: bool) -> str:
     """
     Определяет, является ли последний поворот T-спином.
     
-    T-спин - это особый тип поворота T-тетромино, когда он зажат с трех сторон и дает дополнительные очки.
+    T-спин - это особый тип поворота T-тетромино,
+    когда он зажат с трех сторон и дает дополнительные очки.
     
     Args:
         state: Текущее состояние игры
@@ -961,7 +893,8 @@ def clear_lines(state: GameState) -> int:
     """
     Очищает все заполненные линии с игрового поля.
     
-    Удаляет все строки, где все клетки заняты, а сверху добавляет пустые строки.
+    Удаляет все строки, где все клетки заняты,
+    а сверху добавляет пустые строки.
     
     Args:
         state: Текущее состояние игры
@@ -980,7 +913,8 @@ def refill_bag(state: GameState):
     """
     Пополняет мешок с типами тетромино.
     
-    Использует систему "7-bag" - в каждом мешке есть ровно одна фигура каждого типа, перемешанные случайно.
+    Использует систему "7-bag" - в каждом мешке есть 
+    ровно одна фигура каждого типа, перемешанные случайно.
     
     Args:
         state: Текущее состояние игры
@@ -993,7 +927,8 @@ def spawn_next(state: GameState):
     """
     Создает новую падающую фигуру из очереди.
     
-    Заполняет очередь следующих фигур до 5 элементов и берёт первую для создания текущей фигуры.
+    Заполняет очередь следующих фигур до 5 элементов
+    и берёт первую для создания текущей фигуры.
     
     Args:
         state: Текущее состояние игры
@@ -1034,7 +969,8 @@ def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
     """
     Пытается повернуть текущую фигуру с проверкой wall kick'ов.
     
-    Использует систему SRS (Super Rotation System) для попыток поворота в нескольких позициях.
+    Использует систему SRS (Super Rotation System) для
+    попыток поворота в нескольких позициях.
     
     Args:
         state: Текущее состояние игры
@@ -1061,7 +997,8 @@ def hard_drop_distance(state: GameState) -> int:
     """
     Вычисляет расстояние для быстрого падения текущей фигуры.
     
-    Определяет, на сколько клеток вниз можно опустить фигуру до столкновения.
+    Определяет, на сколько клеток вниз можно опустить
+    фигуру до столкновения.
     
     Args:
         state: Текущее состояние игры
@@ -1084,7 +1021,8 @@ def ghost_position(state: GameState) -> Piece:
     """
     Создает "призрачную" копию текущей фигуры в позиции приземления.
     
-    Показывает игроку, где приземлится фигура при быстром падении.
+    Показывает игроку, где приземлится фигура
+    при быстром падении.
     
     Args:
         state: Текущее состояние игры
@@ -1100,7 +1038,8 @@ def hold_swap(state: GameState):
     """
     Выполняет обмен текущей фигуры с зафиксированной (Hold).
     
-    Механика Hold позволяет сохранить текущую фигуру на потом и использовать её позже.
+    Механика Hold позволяет сохранить текущую фигуру
+    на потом и использовать её позже.
     Можно использовать только один раз на каждую фигуру.
     
     Args:
@@ -1207,390 +1146,78 @@ class AudioManager:
             except Exception:
                 pass
 
-def draw_enhanced_background(surf):
-    """Рисует улучшенный фон для главной игры"""
-    # Основной градиентный фон
-    screen_rect = pygame.Rect(0, 0, WIDTH, HEIGHT)
-    draw_gradient_rect(surf, screen_rect, BG_GRADIENT_TOP, BG_GRADIENT_BOTTOM)
-    
-    # Анимированные декоративные элементы
-    current_time = time.time()
-    # Геометрические фигуры в стиле тетриса
-    for i in range(6):
-        # Плавная анимация позиции
-        offset = math.sin(current_time * 0.5 + i * 0.8) * 20
-        x = WIDTH - 80 + (i % 3) * 30 + offset * 0.3
-        y = 100 + i * 90 + offset
-        size = 15 + (i % 2) * 5
-        
-        # Пульсирующая прозрачность
-        alpha = int(40 + 30 * math.sin(current_time * 1.2 + i * 0.5))
-        
-        # Мини-блоки как у тетромино
-        decoration_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        deco_color = list(COLORS.values())[i % len(COLORS)]
-        decoration_surf.fill((*deco_color, alpha))
-        surf.blit(decoration_surf, (x, y))
-        
-        # Левая сторона с другой скоростью анимации
-        x_left = 20 + (i % 2) * 25 + math.cos(current_time * 0.7 + i) * 15
-        y_left = 150 + i * 80 + math.sin(current_time * 0.3 + i) * 10
-        decoration_left = pygame.Surface((size, size), pygame.SRCALPHA)
-        decoration_left.fill((*deco_color, alpha//2))
-        surf.blit(decoration_left, (x_left, y_left))
-
-# -------------------- Smooth Animation Utilities --------------------
-def smooth_lerp(start, end, t):
-    """Плавная интерполяция между двумя значениями"""
-    # Easing function для более плавной анимации
-    t = max(0, min(1, t))
-    smooth_t = t * t * (3 - 2 * t)  # Smoothstep
-    return start + (end - start) * smooth_t
-
-def pulse_effect(time_offset=0.0, frequency=1.0, amplitude=1.0):
-    """Создает пульсирующий эффект"""
-    current_time = time.time()
-    return amplitude * (0.5 + 0.5 * math.sin((current_time + time_offset) * frequency * 2 * math.pi))
-
-def wave_effect(time_offset=0.0, frequency=0.5, amplitude=10):
-    """Создает волновой эффект для смещения"""
-    current_time = time.time()
-    return amplitude * math.sin((current_time + time_offset) * frequency * 2 * math.pi)
-
-def glow_color(base_color, intensity=0.3, time_offset=0.0):
-    """Создает эффект свечения цвета"""
-    glow = pulse_effect(time_offset, 0.8, intensity)
-    return tuple(min(255, int(c + c * glow)) for c in base_color)
-
-# -------------------- Enhanced Drawing Utilities --------------------
-def draw_gradient_rect(surf, rect, color_top, color_bottom, vertical=True, animated=False):
-    """Рисует прямоугольник с плавным градиентом"""
-    gradient_surf = pygame.Surface((rect.width, rect.height))
-    
-    # Анимированные цвета для плавных эффектов
-    if animated:
-        color_top = glow_color(color_top, 0.2, 0)
-        color_bottom = glow_color(color_bottom, 0.2, 0.5)
-    
-    if vertical:
-        for y in range(rect.height):
-            ratio = y / rect.height
-            # Плавная интерполяция для мягкого перехода
-            smooth_ratio = ratio * ratio * (3 - 2 * ratio)  # Smoothstep
-            r = int(color_top[0] * (1 - smooth_ratio) + color_bottom[0] * smooth_ratio)
-            g = int(color_top[1] * (1 - smooth_ratio) + color_bottom[1] * smooth_ratio)
-            b = int(color_top[2] * (1 - smooth_ratio) + color_bottom[2] * smooth_ratio)
-            pygame.draw.line(gradient_surf, (r, g, b), (0, y), (rect.width, y))
-    else:
-        for x in range(rect.width):
-            ratio = x / rect.width
-            smooth_ratio = ratio * ratio * (3 - 2 * ratio)
-            r = int(color_top[0] * (1 - smooth_ratio) + color_bottom[0] * smooth_ratio)
-            g = int(color_top[1] * (1 - smooth_ratio) + color_bottom[1] * smooth_ratio)
-            b = int(color_top[2] * (1 - smooth_ratio) + color_bottom[2] * smooth_ratio)
-            pygame.draw.line(gradient_surf, (r, g, b), (x, 0), (x, rect.height))
-    
-    surf.blit(gradient_surf, rect.topleft)
-
-def draw_shadow(surf, rect, offset=(3, 3), blur=2, color=PANEL_SHADOW):
-    """Рисует тень для прямоугольника"""
-    shadow_rect = rect.copy()
-    shadow_rect.x += offset[0]
-    shadow_rect.y += offset[1]
-    
-    # Простая тень без размытия для производительности
-    shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-    shadow_surf.fill((*color, 80))  # Полупрозрачная тень
-    surf.blit(shadow_surf, shadow_rect.topleft)
-
-def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
-    """Рисует улучшенную панель с плавными эффектами"""
-    # Многослойная тень для глубины
-    for i in range(3):
-        shadow_offset = (2 + i, 2 + i)
-        shadow_alpha = 60 - i * 15
-        shadow_rect = rect.copy()
-        shadow_rect.x += shadow_offset[0]
-        shadow_rect.y += shadow_offset[1]
-        shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-        shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
-        surf.blit(shadow_surf, shadow_rect.topleft)
-    
-    # Основной фон с плавным градиентом
-    if animated:
-        panel_top = glow_color((35, 40, 50), 0.15, 0)
-        panel_bottom = glow_color((25, 30, 38), 0.1, 0.3)
-    else:
-        panel_top = (35, 40, 50)
-        panel_bottom = (25, 30, 38)
-    
-    draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
-    
-    # Многослойная рамка
-    # Основная рамка
-    border_color = glow_color(PANEL_BORDER, 0.1, 0) if animated else PANEL_BORDER
-    pygame.draw.rect(surf, border_color, rect, 2, border_radius=12)
-    
-    # Внутренняя подсветка
-    inner_rect = rect.copy()
-    inner_rect.inflate(-4, -4)
-    inner_color = (45, 52, 65) if not animated else glow_color((45, 52, 65), 0.2, 0.7)
-    pygame.draw.rect(surf, inner_color, inner_rect, 1, border_radius=10)
-    
-    # Наружное свечение (для анимированных панелей)
-    if animated:
-        glow_rect = rect.copy()
-        glow_rect.inflate(4, 4)
-        glow_alpha = int(20 + 15 * pulse_effect(0, 0.5))
-        glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-        glow_surf.fill((*ACCENT_PRIMARY, glow_alpha))
-        surf.blit(glow_surf, glow_rect.topleft)
-    
-    # Заголовок (если указан)
-    if title and font:
-        title_color = glow_color(WHITE, 0.1, 0) if animated else WHITE
-        title_surf = font.render(title, True, title_color)
-        title_x = rect.x + (rect.width - title_surf.get_width()) // 2
-        title_y = rect.y + 10
-        surf.blit(title_surf, (title_x, title_y))
-
-# -------------------- Enhanced Drawing --------------------
-def draw_block(surf, x, y, color, border=True, alpha=None, enhanced=True, animate_glow=False, kind=None):
+# -------------------- Drawing --------------------
+def draw_block(surf, x, y, color, border=True, alpha=None):
     rect = pygame.Rect(x, y, BLOCK-1, BLOCK-1)
-    corner_radius = 8  # Увеличиваем радиус закругления для более мягкого вида
-    
-    if enhanced:
-        # Плавная анимация свечения для активных блоков
-        if animate_glow:
-            glow_intensity = pulse_effect(x * 0.01 + y * 0.01, 1.2, 0.3)
-            color = glow_color(color, glow_intensity, 0)
-        
-        # Красивые градиентные цвета для каждого типа фигуры
-        if kind and kind in COLORS_GRADIENT_TOP:
-            light_color = COLORS_GRADIENT_TOP[kind]
-            dark_color = COLORS_GRADIENT_BOTTOM[kind]
-            base_color = COLORS[kind]
-        else:
-            # Фолбэк для обычных блоков
-            light_color = tuple(min(255, c + 40) for c in color)
-            dark_color = tuple(max(0, c - 30) for c in color)
-            base_color = color
-        # Улучшенная отрисовка с 3D эффектом и закругленными углами
-        if alpha is not None:
-            # Полупрозрачный блок (для ghost piece) с красивым градиентом
-            block_surf = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
-            block_rect = pygame.Rect(0, 0, BLOCK-1, BLOCK-1)
-            
-            # Красивый градиент даже для ghost piece
-            for y_offset in range(BLOCK-1):
-                ratio = y_offset / (BLOCK-1)
-                smooth_ratio = ratio * ratio * (3 - 2 * ratio)  # Smoothstep
-                r = int(light_color[0] * (1 - smooth_ratio) + dark_color[0] * smooth_ratio)
-                g = int(light_color[1] * (1 - smooth_ratio) + dark_color[1] * smooth_ratio)
-                b = int(light_color[2] * (1 - smooth_ratio) + dark_color[2] * smooth_ratio)
-                pygame.draw.line(block_surf, (r, g, b, alpha), (0, y_offset), (BLOCK-1, y_offset))
-            
-            # Применяем маску с закругленными углами
-            mask_surf = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
-            pygame.draw.rect(mask_surf, (255, 255, 255, 255), block_rect, border_radius=corner_radius)
-            block_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-            
-            surf.blit(block_surf, rect.topleft)
-        else:
-            # Обычный блок с красивым градиентом и полной окраской
-            # Создаем временную поверхность для градиента
-            block_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-            block_rect = pygame.Rect(0, 0, rect.width, rect.height)
-            
-            # Красивый многослойный градиент с насыщенными цветами
-            for y_offset in range(rect.height):
-                ratio = y_offset / rect.height
-                if animate_glow:
-                    smooth_ratio = ratio * ratio * (3 - 2 * ratio)  # Smoothstep
-                else:
-                    smooth_ratio = ratio
-                    
-                # Основной градиент
-                r = int(light_color[0] * (1 - smooth_ratio) + dark_color[0] * smooth_ratio)
-                g = int(light_color[1] * (1 - smooth_ratio) + dark_color[1] * smooth_ratio)
-                b = int(light_color[2] * (1 - smooth_ratio) + dark_color[2] * smooth_ratio)
-                
-                # Добавляем яркость и насыщенность для полной окраски
-                if ratio < 0.4:  # Верхняя часть - более яркая
-                    saturation_boost = 1.3 - ratio * 0.5
-                    r = min(255, int(r * saturation_boost))
-                    g = min(255, int(g * saturation_boost))
-                    b = min(255, int(b * saturation_boost))
-                
-                pygame.draw.line(block_surf, (r, g, b), (0, y_offset), (rect.width, y_offset))
-            
-            # Применяем маску с закругленными углами
-            mask_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(mask_surf, (255, 255, 255, 255), block_rect, border_radius=corner_radius)
-            block_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-            
-            surf.blit(block_surf, rect.topleft)
-            
-            # Плавно пульсирующий блик с закругленными углами
-            if animate_glow:
-                highlight_intensity = pulse_effect(x * 0.02 + y * 0.01, 0.8, 0.5)
-                highlight_alpha = int(120 + 60 * highlight_intensity)
-            else:
-                highlight_alpha = 120
-                
-            highlight_rect = pygame.Rect(x + 3, y + 3, BLOCK - 10, 8)
-            highlight_color = tuple(min(255, c + 60) for c in color)
-            highlight_surf = pygame.Surface((highlight_rect.width, highlight_rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(highlight_surf, (*highlight_color, highlight_alpha), 
-                           pygame.Rect(0, 0, highlight_rect.width, highlight_rect.height), 
-                           border_radius=corner_radius//2)
-            surf.blit(highlight_surf, highlight_rect.topleft)
-            
-            # Тень снизу с закругленными углами
-            shadow_rect = pygame.Rect(x + 3, y + BLOCK - 10, BLOCK - 10, 6)
-            shadow_color = tuple(max(0, c - 40) for c in color)
-            shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(shadow_surf, (*shadow_color, 100), 
-                           pygame.Rect(0, 0, shadow_rect.width, shadow_rect.height), 
-                           border_radius=corner_radius//2)
-            surf.blit(shadow_surf, shadow_rect.topleft)
-            
-        if border:
-            # Красивая рамка с плавными эффектами и закругленными углами
-            border_color = tuple(max(0, c - 80) for c in base_color)
-            if animate_glow:
-                border_color = glow_color(border_color, 0.3, 0)
-            pygame.draw.rect(surf, border_color, rect, 2, border_radius=corner_radius)
-            
-            # Яркая внутренняя подсветка с закругленными углами
-            inner_rect = rect.copy()
-            inner_rect.inflate(-4, -4)
-            inner_light = tuple(min(255, c + 40) for c in base_color)
-            pygame.draw.rect(surf, inner_light, inner_rect, 1, border_radius=max(1, corner_radius-2))
+    if alpha is not None:
+        block = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
+        c = (*color, alpha)
+        pygame.draw.rect(block, c, block.get_rect(), border_radius=6)
+        surf.blit(block, rect.topleft)
     else:
-        # Оригинальная отрисовка с закругленными углами
-        if alpha is not None:
-            block = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
-            c = (*color, alpha)
-            pygame.draw.rect(block, c, block.get_rect(), border_radius=corner_radius)
-            surf.blit(block, rect.topleft)
-        else:
-            pygame.draw.rect(surf, color, rect, border_radius=corner_radius)
-        if border:
-            pygame.draw.rect(surf, (0,0,0), rect, 2, border_radius=corner_radius)
+        pygame.draw.rect(surf, color, rect, border_radius=6)
+    if border:
+        pygame.draw.rect(surf, (0,0,0), rect, 2, border_radius=6)
 
 def draw_grid(surf, origin_x, origin_y, state: GameState):
-    # Улучшенная отрисовка игрового поля
-    playfield_rect = pygame.Rect(origin_x, origin_y, PLAY_W, PLAY_H)
-    
-    # Тень игрового поля
-    draw_shadow(surf, playfield_rect, (4, 4))
-    
-    # Фон с градиентом
-    bg_top = (28, 32, 40)
-    bg_bottom = (20, 24, 32)
-    draw_gradient_rect(surf, playfield_rect, bg_top, bg_bottom)
-    
-    # Внешняя рамка с более выраженными закругленными углами
-    field_corner_radius = 16  # Увеличиваем радиус закругления для игрового поля
-    pygame.draw.rect(surf, PLAYFIELD_BORDER, playfield_rect, 3, border_radius=field_corner_radius)
-    
-    # Внутренняя подсветка с соответствующим радиусом
-    inner_rect = playfield_rect.copy()
-    inner_rect.inflate(-6, -6)
-    pygame.draw.rect(surf, (45, 50, 62), inner_rect, 1, border_radius=field_corner_radius-3)
-    
-    # Линии сетки (более тонкие)
-    grid_color = (35, 40, 50)
-    for i in range(1, PLAY_COLS):
+    pygame.draw.rect(surf, (32, 32, 38), (origin_x, origin_y, PLAY_W, PLAY_H), border_radius=12)
+    for i in range(PLAY_COLS + 1):
         x = origin_x + i * BLOCK
-        pygame.draw.line(surf, grid_color, (x, origin_y + 3), (x, origin_y + PLAY_H - 3))
-    for j in range(1, PLAY_ROWS):
+        pygame.draw.line(surf, GRID, (x, origin_y), (x, origin_y + PLAY_H))
+    for j in range(PLAY_ROWS + 1):
         y = origin_y + j * BLOCK
-        pygame.draw.line(surf, grid_color, (origin_x + 3, y), (origin_x + PLAY_W - 3, y))
-    
-    # Отрисовка блоков
+        pygame.draw.line(surf, GRID, (origin_x, y), (origin_x + PLAY_W, y))
     for y in range(PLAY_ROWS):
         for x in range(PLAY_COLS):
             kind = state.grid[y][x]
             if kind:
                 color = COLORS[kind]
-                draw_block(surf, origin_x + x*BLOCK, origin_y + y*BLOCK, color, kind=kind)
+                draw_block(surf, origin_x + x*BLOCK, origin_y + y*BLOCK, color)
 
-def draw_piece(surf, origin_x, origin_y, piece: Piece, ghost=False, animate_current=False):
+def draw_piece(surf, origin_x, origin_y, piece: Piece, ghost=False):
     if piece is None:
         return
     color = GHOST if ghost else COLORS[piece.kind]
     for x, y in piece.cells():
         if y >= 0:
-            # Анимированные эффекты для текущей фигуры
-            use_animation = animate_current and not ghost
-            kind = piece.kind if not ghost else None
-            draw_block(surf, origin_x + x*BLOCK, origin_y + y*BLOCK, color, 
-                      border=not ghost, alpha=120 if ghost else None, 
-                      animate_glow=use_animation, kind=kind)
+            draw_block(surf, origin_x + x*BLOCK, origin_y + y*BLOCK, color, border=not ghost, alpha=120 if ghost else None)
 
 def draw_panel(surf, origin_x, origin_y, state: GameState, font, small, audio: AudioManager):
-    current_time = time.time()
-    
-    # Основная панель с плавной анимацией
-    panel_float = wave_effect(current_time, 0.5, 2)
-    panel_rect = pygame.Rect(origin_x - 10, origin_y - 10 + int(panel_float), PANEL_W + 20, HEIGHT - 40)
-    draw_enhanced_panel(surf, panel_rect, animated=True)
-    
-    # Анимированный заголовок TETRIS
-    title_rect = pygame.Rect(origin_x, origin_y + int(panel_float), PANEL_W, 50)
-    title_pulse = pulse_effect(0, 0.8, 0.2)
-    title_top = glow_color(ACCENT_PRIMARY, title_pulse, 0)
-    title_bottom = glow_color(ACCENT_SECONDARY, title_pulse, 0.5)
-    draw_gradient_rect(surf, title_rect, title_top, title_bottom, vertical=False, animated=True)
-    pygame.draw.rect(surf, glow_color((100, 120, 150), 0.3, current_time), title_rect, 1, border_radius=8)
-    
     title = font.render("TETRIS", True, WHITE)
-    title_shadow = font.render("TETRIS", True, (0, 0, 0))
-    title_x = origin_x + (PANEL_W - title.get_width()) // 2
-    title_y = origin_y + (50 - title.get_height()) // 2
-    surf.blit(title_shadow, (title_x + 2, title_y + 2))
-    surf.blit(title, (title_x, title_y))
+    surf.blit(title, (origin_x, origin_y))
     
-    def draw_info_section(y_pos, title_text, content_lines, accent_color=ACCENT_PRIMARY):
-        """Рисует секцию информации с заголовком и содержимым"""
-        section_rect = pygame.Rect(origin_x + 5, y_pos, PANEL_W - 10, len(content_lines) * 26 + 30)
-        
-        # Фон секции
-        section_bg_top = (30, 35, 45)
-        section_bg_bottom = (25, 30, 38)
-        draw_gradient_rect(surf, section_rect, section_bg_top, section_bg_bottom)
-        pygame.draw.rect(surf, (50, 60, 75), section_rect, 1, border_radius=6)
-        
-        # Заголовок секции
-        title_surf = small.render(title_text, True, accent_color)
-        surf.blit(title_surf, (origin_x + 10, y_pos + 5))
-        
-        # Содержимое
-        for i, line in enumerate(content_lines):
-            text_surf = small.render(line, True, WHITE)
-            surf.blit(text_surf, (origin_x + 15, y_pos + 25 + i * 22))
-        
-        return y_pos + section_rect.height + 10
+    def label(y, text):
+        t = small.render(text, True, DIM)
+        surf.blit(t, (origin_x, y))
     
-    y = origin_y + 70
+    y = origin_y + 50
     
     # Информация о режиме игры
-    mode_info = []
     mode_name = get_mode_display_name(state.game_mode)
-    mode_info.append(f'Режим: {mode_name}')
+    mode_text = small.render(f'Режим: {mode_name}', True, WHITE)
+    surf.blit(mode_text, (origin_x, y))
+    y += 26
     
     # Информация о кампании (если активна)
     if state.game_mode == GameMode.CAMPAIGN and state.current_campaign_level <= len(CAMPAIGN_LEVELS):
         level_config = CAMPAIGN_LEVELS[state.current_campaign_level - 1]
-        mode_info.append(f'Уровень {state.current_campaign_level}: {level_config.name}')
+        campaign_text = small.render(f'Кампания: Уровень {state.current_campaign_level}', True, WHITE)
+        surf.blit(campaign_text, (origin_x, y))
+        y += 20
+        
+        level_name_text = small.render(level_config.name, True, (200, 200, 220))
+        surf.blit(level_name_text, (origin_x, y))
+        y += 25
         
         # Отображение целей
-        objectives_info = []
+        objectives_title = small.render('Цели:', True, (180, 180, 200))
+        surf.blit(objectives_title, (origin_x, y))
+        y += 20
+        
         for obj in level_config.objectives:
             current_progress = state.campaign_objectives_progress.get(obj.type, 0)
             if obj.type == "time":
+                # Отображаем время в формате мин:сек
                 mins = current_progress // 60
                 secs = current_progress % 60
                 target_mins = obj.target // 60
@@ -1599,154 +1226,72 @@ def draw_panel(surf, origin_x, origin_y, state: GameState, font, small, audio: A
             else:
                 progress_text = f'{current_progress}/{obj.target}'
             
+            # Цвет в зависимости от выполнения
             completed = current_progress >= obj.target
-            status = "✓" if completed else "○"
-            objectives_info.append(f'{status} {obj.description}: {progress_text}')
+            color = (100, 255, 100) if completed else (255, 255, 255)
+            
+            obj_text = small.render(f'  {obj.description}: {progress_text}', True, color)
+            surf.blit(obj_text, (origin_x, y))
+            y += 18
         
-        y = draw_info_section(y, "ЗАДАЧИ", objectives_info, ACCENT_WARNING)
-    else:
-        y = draw_info_section(y, "РЕЖИМ ИГРЫ", mode_info, ACCENT_PRIMARY)
+        y += 10  # Дополнительный отступ
     
-    # Игровая статистика
-    stats_info = [
-        f"Очки: {state.score:,}",
-        f"Линии: {state.lines}",
-        f"Уровень: {state.level}"
-    ]
+    # Остальная информация
+    label(y, f"Score: {state.score}")
+    label(y + 26, f"Lines: {state.lines}")
+    label(y + 52, f"Level: {state.level}")
     if state.combo >= 1:
-        stats_info.append(f"Комбо: x{state.combo}")
-    
-    y = draw_info_section(y, "СТАТИСТИКА", stats_info, ACCENT_SUCCESS)
-    
-    # Следующие фигуры
-    next_rect = pygame.Rect(origin_x + 5, y, PANEL_W - 10, 380)
-    draw_gradient_rect(surf, next_rect, (30, 35, 45), (25, 30, 38))
-    pygame.draw.rect(surf, (50, 60, 75), next_rect, 1, border_radius=6)
-    
-    next_title = small.render("СЛЕДУЮЩИЕ", True, ACCENT_SECONDARY)
-    surf.blit(next_title, (origin_x + 10, y + 5))
-    
-    ny = y + 30
+        label(y + 78, f"Combo: x{state.combo}")
+    nxt = small.render("Next:", True, DIM)
+    surf.blit(nxt, (origin_x, y + 120))
+    ny = y + 150
     for i, kind in enumerate(state.next_queue[:5]):
-        draw_mini(surf, origin_x + 5, ny + i * 75, kind, small)
-    
-    # Hold фигура
-    hold_y = ny + 5 * 75 + 10
-    hold_rect = pygame.Rect(origin_x + 5, hold_y, PANEL_W - 10, 90)
-    draw_gradient_rect(surf, hold_rect, (30, 35, 45), (25, 30, 38))
-    pygame.draw.rect(surf, (50, 60, 75), hold_rect, 1, border_radius=6)
-    
-    hold_title = small.render("РЕЗЕРВ", True, ACCENT_SECONDARY)
-    surf.blit(hold_title, (origin_x + 10, hold_y + 5))
-    
-    draw_mini(surf, origin_x + 5, hold_y + 25, state.hold, small)
-    
-    # Управление и музыка внизу
-    help_y = HEIGHT - 180
-    controls = [
-        "← → : Движение",
-        "↓ : Мягкое падение (2x)", 
-        "Space : Мягкое/Жесткое падение",
-        "Z / ↑ : Поворот",
-        "X : Обратный поворот",
-        "C/Shift : Резерв",
-        "P/Esc : Пауза, R : Рестарт",
-    ]
-    
-    control_rect = pygame.Rect(origin_x + 5, help_y, PANEL_W - 10, len(controls) * 18 + 20)
-    draw_gradient_rect(surf, control_rect, (25, 30, 38), (20, 25, 33))
-    pygame.draw.rect(surf, (45, 55, 70), control_rect, 1, border_radius=6)
-    
-    control_title = small.render("УПРАВЛЕНИЕ", True, DIM)
-    surf.blit(control_title, (origin_x + 10, help_y + 5))
-    
-    for i, line in enumerate(controls):
-        t = small.render(line, True, (180, 185, 195))
-        surf.blit(t, (origin_x + 10, help_y + 25 + i * 18))
-    
-    # Информация о музыке
+        draw_mini(surf, origin_x, ny + i * 70, kind, small)
+    hold_lbl = small.render("Hold:", True, DIM)
+    surf.blit(hold_lbl, (origin_x, y + 120 + 5 * 70))
+    draw_mini(surf, origin_x, y + 120 + 5 * 70 + 30, state.hold, small)
+    help_y = HEIGHT - 160
+    for i, line in enumerate([
+        "← → : Move",
+        "↓ : Smooth fall (2x fast)",
+        "Space : Smooth/Hard drop",
+        "Z / ↑ : Rotate",
+        "X : Counter-rotate",
+        "C/Shift : Hold",
+        "P/Esc : Pause, R : Restart",
+    ]):
+        t = small.render(line, True, (150, 150, 165))
+        surf.blit(t, (origin_x, help_y + i * 18))
+    # music info
     if audio.enabled:
-        music_y = help_y - 30
-        music_name = os.path.basename(audio.playlist[audio.index])
-        if len(music_name) > 30:
-            music_name = music_name[:27] + "..."
-        music_text = small.render(f"♪ {music_name}", True, ACCENT_SECONDARY)
-        surf.blit(music_text, (origin_x + 5, music_y))
+        txt = small.render(f"Music: {os.path.basename(audio.playlist[audio.index])}", True, DIM)
+        surf.blit(txt, (origin_x, help_y - 26))
 
 def draw_mini(surf, origin_x, origin_y, kind: Optional[str], small):
     box = pygame.Rect(origin_x, origin_y, PANEL_W-10, 80)
-    
-    # Улучшенный фон с градиентом
-    draw_enhanced_panel(surf, box)
-    
+    pygame.draw.rect(surf, (32, 32, 36), box, border_radius=10)
+    pygame.draw.rect(surf, (0,0,0), box, 2, border_radius=10)
     if not kind:
-        # Пустое место
-        empty_text = small.render("Пусто", True, DIM)
-        text_x = box.x + (box.width - empty_text.get_width()) // 2
-        text_y = box.y + (box.height - empty_text.get_height()) // 2
-        surf.blit(empty_text, (text_x, text_y))
         return
-    
     grid = ROTATED[kind][0]
     cells = [(i, j) for j in range(4) for i in range(4) if grid[j][i] != '.']
     if not cells:
         return
-    
     minx = min(i for i, _ in cells)
     maxx = max(i for i, _ in cells)
     miny = min(j for _, j in cells)
     maxy = max(j for _, j in cells)
     w = maxx - minx + 1
     h = maxy - miny + 1
-    scale = 18  # Немного меньше для лучшего вида
+    scale = 20
     offset_x = origin_x + 10 + (PANEL_W - 20 - w*scale) // 2
-    offset_y = origin_y + 8 + (80 - 16 - h*scale) // 2
-    
+    offset_y = origin_y + 8 + (60 - 16 - h*scale) // 2
     for i, j in cells:
         x = (i - minx) * scale
         y = (j - miny) * scale
-        rect = pygame.Rect(offset_x + x, offset_y + y, scale-2, scale-2)
-        
-        # Мини-версия улучшенного блока с красивыми градиентными цветами
-        color = COLORS[kind]
-        mini_corner_radius = 5  # Меньший радиус для мини-блоков
-        
-        # Используем красивые градиентные цвета
-        light_color = COLORS_GRADIENT_TOP[kind]
-        dark_color = COLORS_GRADIENT_BOTTOM[kind]
-        
-        # Создаем мини-блок с градиентом и закругленными углами
-        mini_surf = pygame.Surface((scale-2, scale-2), pygame.SRCALPHA)
-        mini_rect = pygame.Rect(0, 0, scale-2, scale-2)
-        
-        # Рисуем градиент
-        for y_offset in range(scale-2):
-            ratio = y_offset / (scale-2)
-            r = int(light_color[0] * (1 - ratio) + dark_color[0] * ratio)
-            g = int(light_color[1] * (1 - ratio) + dark_color[1] * ratio)
-            b = int(light_color[2] * (1 - ratio) + dark_color[2] * ratio)
-            pygame.draw.line(mini_surf, (r, g, b), (0, y_offset), (scale-2, y_offset))
-        
-        # Применяем маску с закругленными углами
-        mask_surf = pygame.Surface((scale-2, scale-2), pygame.SRCALPHA)
-        pygame.draw.rect(mask_surf, (255, 255, 255, 255), mini_rect, border_radius=mini_corner_radius)
-        mini_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-        
-        surf.blit(mini_surf, (offset_x + x, offset_y + y))
-        
-        # Рамка с закругленными углами
-        border_color = tuple(max(0, c - 40) for c in color)
-        border_rect = pygame.Rect(offset_x + x, offset_y + y, scale-2, scale-2)
-        pygame.draw.rect(surf, border_color, border_rect, 1, border_radius=mini_corner_radius)
-        
-        # Маленький блик с закругленными углами
-        highlight_rect = pygame.Rect(offset_x + x + 1, offset_y + y + 1, scale//3, 3)
-        highlight_color = tuple(min(255, c + 40) for c in color)
-        highlight_surf = pygame.Surface((highlight_rect.width, highlight_rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(highlight_surf, (*highlight_color, 150), 
-                       pygame.Rect(0, 0, highlight_rect.width, highlight_rect.height), 
-                       border_radius=mini_corner_radius//2)
-        surf.blit(highlight_surf, highlight_rect.topleft)
+        rect = pygame.Rect(offset_x + x, offset_y + y, scale-1, scale-1)
+        pygame.draw.rect(surf, COLORS[kind], rect, border_radius=4)
+        pygame.draw.rect(surf, (0,0,0), rect, 1, border_radius=4)
 
 # -------------------- Game Mode Functions --------------------
 
@@ -1871,130 +1416,12 @@ def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
 def button_rect(x, y, w, h):
     return pygame.Rect(x, y, w, h)
 
-def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False, active=False, style="default", transition_progress=1.0):
-    """Улучшенная отрисовка кнопок с плавными переходами"""
-    # Плавная анимация тени
-    if not active:
-        shadow_intensity = 1.0 + 0.5 * hover * transition_progress
-        for i in range(int(3 * shadow_intensity)):
-            shadow_offset = (1 + i, 1 + i)
-            shadow_alpha = int(30 - i * 8)
-            shadow_rect = rect.copy()
-            shadow_rect.x += shadow_offset[0]
-            shadow_rect.y += shadow_offset[1]
-            shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-            shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
-            surface.blit(shadow_surf, shadow_rect.topleft)
-    
-    # Цвета в зависимости от стиля
-    if style == "primary":
-        if active:
-            bg_top, bg_bottom = (45, 110, 180), (35, 90, 160)
-            border_color = (60, 130, 200)
-            text_color = WHITE
-        elif hover:
-            # Плавный переход при наведении
-            base_top, base_bottom = (64, 146, 245), (44, 126, 225)
-            hover_top, hover_bottom = (84, 166, 255), (64, 146, 245)
-            bg_top = tuple(int(smooth_lerp(base_top[i], hover_top[i], transition_progress)) for i in range(3))
-            bg_bottom = tuple(int(smooth_lerp(base_bottom[i], hover_bottom[i], transition_progress)) for i in range(3))
-            border_color = glow_color(BUTTON_BORDER_HOVER, 0.2, 0)
-            text_color = BUTTON_TEXT_HOVER
-        else:
-            bg_top, bg_bottom = (64, 146, 245), (44, 126, 225)
-            border_color = BUTTON_BORDER
-            text_color = BUTTON_TEXT
-    elif style == "success":
-        if active:
-            bg_top, bg_bottom = (30, 150, 90), (25, 130, 75)
-            border_color = (45, 170, 105)
-            text_color = WHITE
-        elif hover:
-            base_top, base_bottom = (40, 200, 120), (30, 180, 100)
-            hover_top, hover_bottom = (60, 220, 140), (50, 200, 120)
-            bg_top = tuple(int(smooth_lerp(base_top[i], hover_top[i], transition_progress)) for i in range(3))
-            bg_bottom = tuple(int(smooth_lerp(base_bottom[i], hover_bottom[i], transition_progress)) for i in range(3))
-            border_color = glow_color((55, 215, 135), 0.3, 0)
-            text_color = WHITE
-        else:
-            bg_top, bg_bottom = (40, 200, 120), (30, 180, 100)
-            border_color = (55, 215, 135)
-            text_color = WHITE
-    elif style == "danger":
-        if active:
-            bg_top, bg_bottom = (180, 40, 50), (160, 30, 40)
-            border_color = (200, 55, 65)
-            text_color = WHITE
-        elif hover:
-            base_top, base_bottom = (220, 53, 69), (200, 43, 59)
-            hover_top, hover_bottom = (240, 73, 89), (220, 63, 79)
-            bg_top = tuple(int(smooth_lerp(base_top[i], hover_top[i], transition_progress)) for i in range(3))
-            bg_bottom = tuple(int(smooth_lerp(base_bottom[i], hover_bottom[i], transition_progress)) for i in range(3))
-            border_color = glow_color((235, 68, 84), 0.2, 0)
-            text_color = WHITE
-        else:
-            bg_top, bg_bottom = (220, 53, 69), (200, 43, 59)
-            border_color = (235, 68, 84)
-            text_color = WHITE
-    else:  # default
-        if active:
-            bg_top, bg_bottom = BUTTON_BG_ACTIVE, tuple(max(0, c - 10) for c in BUTTON_BG_ACTIVE)
-            border_color = BUTTON_BORDER_HOVER
-            text_color = BUTTON_TEXT_HOVER
-        elif hover:
-            base_top, base_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-            hover_top, hover_bottom = BUTTON_BG_HOVER, tuple(max(0, c - 8) for c in BUTTON_BG_HOVER)
-            bg_top = tuple(int(smooth_lerp(base_top[i], hover_top[i], transition_progress)) for i in range(3))
-            bg_bottom = tuple(int(smooth_lerp(base_bottom[i], hover_bottom[i], transition_progress)) for i in range(3))
-            border_color = glow_color(BUTTON_BORDER_HOVER, 0.1, 0)
-            text_color = BUTTON_TEXT_HOVER
-        else:
-            bg_top, bg_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-            border_color = BUTTON_BORDER
-            text_color = BUTTON_TEXT
-    
-    # Плавный градиентный фон
-    draw_gradient_rect(surface, rect, bg_top, bg_bottom, animated=hover)
-    
-    # Анимированная рамка
-    border_width = 2 + int(hover * transition_progress)
-    pygame.draw.rect(surface, border_color, rect, border_width, border_radius=8)
-    
-    # Внутренняя подсветка с плавной анимацией
-    if hover and not active:
-        inner_rect = rect.copy()
-        inner_rect.inflate(-4, -4)
-        highlight_alpha = int(30 * transition_progress)
-        highlight_color = tuple(min(255, c + 20) for c in bg_top)
-        highlight_surf = pygame.Surface((inner_rect.width, inner_rect.height), pygame.SRCALPHA)
-        highlight_surf.fill((*highlight_color, highlight_alpha))
-        surface.blit(highlight_surf, inner_rect.topleft)
-        pygame.draw.rect(surface, highlight_color, inner_rect, 1, border_radius=6)
-    
-    # Пульсирующее свечение для акцентных кнопок
-    if style in ["primary", "success", "danger"] and hover:
-        glow_rect = rect.copy()
-        glow_rect.inflate(6, 6)
-        glow_alpha = int(15 * pulse_effect(0, 1.5) * transition_progress)
-        glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-        glow_surf.fill((*border_color, glow_alpha))
-        surface.blit(glow_surf, glow_rect.topleft)
-    
-    # Текст с плавной анимацией
-    if hover and style in ["primary", "success", "danger"]:
-        text_color = glow_color(text_color, 0.1, 0)
-    
-    txt = font.render(text, True, text_color)
-    text_x = rect.x + (rect.w - txt.get_width()) // 2
-    text_y = rect.y + (rect.h - txt.get_height()) // 2
-    
-    # Плавная тень текста
-    if style in ["primary", "success", "danger"]:
-        shadow_txt = font.render(text, True, (0, 0, 0))
-        shadow_offset = 1 + int(0.5 * transition_progress * hover)
-        surface.blit(shadow_txt, (text_x + shadow_offset, text_y + shadow_offset))
-    
-    surface.blit(txt, (text_x, text_y))
+def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False):
+    color = (70, 70, 74) if hover else BUTTON_BG
+    pygame.draw.rect(surface, color, rect, border_radius=8)
+    pygame.draw.rect(surface, BUTTON_BORDER, rect, 2, border_radius=8)
+    txt = font.render(text, True, WHITE)
+    surface.blit(txt, (rect.x + (rect.w - txt.get_width()) // 2, rect.y + (rect.h - txt.get_height()) // 2))
 
 def mode_selection_menu(screen, clock, font, small, audio: AudioManager):
     """Меню выбора игрового режима"""
@@ -2017,124 +1444,51 @@ def mode_selection_menu(screen, clock, font, small, audio: AudioManager):
                 elif ev.key == pygame.K_ESCAPE:
                     pygame.quit(); sys.exit(0)
         
-        # Улучшенная отрисовка с плавными эффектами
-        # Анимированный фон
-        screen_rect = pygame.Rect(0, 0, WIDTH, HEIGHT)
-        current_time = time.time()
-        animated_bg_top = glow_color(BG_GRADIENT_TOP, 0.1, current_time)
-        animated_bg_bottom = glow_color(BG_GRADIENT_BOTTOM, 0.05, current_time + 1)
-        draw_gradient_rect(screen, screen_rect, animated_bg_top, animated_bg_bottom)
+        # Отрисовка
+        screen.fill(BG)
         
-        # Плавающие декоративные элементы
-        for i in range(8):
-            wave_x = wave_effect(i * 0.7, 0.3, 25)
-            wave_y = wave_effect(i * 0.5 + 1, 0.2, 15)
-            x = i * (WIDTH // 8) + 50 + wave_x
-            y = HEIGHT // 4 + (i % 2) * 100 + wave_y
-            size = 20 + (i % 3) * 10
-            alpha = int(30 + 25 * pulse_effect(i * 0.3, 0.8))
-            decoration = pygame.Surface((size, size), pygame.SRCALPHA)
-            decoration.fill((*ACCENT_PRIMARY, alpha))
-            screen.blit(decoration, (x, y))
-        
-        # Главная панель с плавной анимацией
-        main_panel = pygame.Rect(WIDTH // 2 - 300, 80, 600, HEIGHT - 160)
-        float_offset = wave_effect(current_time, 0.4, 3)
-        main_panel.y += int(float_offset)
-        draw_enhanced_panel(screen, main_panel, animated=True)
-        
-        # Анимированный заголовок
-        title_rect = pygame.Rect(WIDTH // 2 - 250, 100 + int(float_offset), 500, 60)
-        title_glow = pulse_effect(0, 0.7, 0.3)
-        title_top = glow_color(ACCENT_PRIMARY, title_glow, 0)
-        title_bottom = glow_color(ACCENT_SECONDARY, title_glow, 0.5)
-        draw_gradient_rect(screen, title_rect, title_top, title_bottom, vertical=False, animated=True)
-        pygame.draw.rect(screen, glow_color((120, 140, 170), 0.4, current_time), title_rect, 2, border_radius=12)
-        
+        # Заголовок
         title = font.render('Выберите режим игры', True, WHITE)
-        title_shadow = font.render('Выберите режим игры', True, (0, 0, 0))
-        title_x = WIDTH // 2 - title.get_width() // 2
-        title_y = 115 + int(float_offset)
-        text_wave = wave_effect(current_time, 1.0, 1)
-        screen.blit(title_shadow, (title_x + 2 + int(text_wave), title_y + 2))
-        screen.blit(title, (title_x + int(text_wave), title_y))
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 100))
         
         # Опции режимов
         y_start = 200
         for i, mode in enumerate(modes):
             config = GAME_MODE_CONFIGS[mode]
-            is_selected = i == selected_mode
-            
-            # Панель режима
-            mode_rect = pygame.Rect(WIDTH // 2 - 280, y_start + i * 130, 560, 110)
-            
-            if is_selected:
-                # Анимация выделения
-                glow_rect = mode_rect.copy()
-                glow_rect.inflate(8, 8)
-                glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-                glow_surf.fill((*ACCENT_PRIMARY, 100))
-                screen.blit(glow_surf, glow_rect.topleft)
-                
-                # Яркий фон для выбранного
-                draw_gradient_rect(screen, mode_rect, (50, 60, 75), (40, 50, 65))
-                pygame.draw.rect(screen, ACCENT_PRIMARY, mode_rect, 3, border_radius=12)
-            else:
-                # Обычный фон
-                draw_gradient_rect(screen, mode_rect, (35, 42, 52), (25, 32, 42))
-                pygame.draw.rect(screen, (60, 70, 85), mode_rect, 2, border_radius=12)
+            color = WHITE if i == selected_mode else DIM
             
             # Название режима
-            mode_color = WHITE if is_selected else (200, 210, 220)
-            mode_text = font.render(config.name, True, mode_color)
-            mode_x = mode_rect.x + 20
-            mode_y = mode_rect.y + 15
+            mode_text = font.render(config.name, True, color)
+            x = WIDTH // 2 - mode_text.get_width() // 2
+            y = y_start + i * 120
             
-            if is_selected:
-                mode_shadow = font.render(config.name, True, (0, 0, 0))
-                screen.blit(mode_shadow, (mode_x + 1, mode_y + 1))
+            # Подсветка выбранного режима
+            if i == selected_mode:
+                highlight_rect = pygame.Rect(x - 20, y - 10, mode_text.get_width() + 40, mode_text.get_height() + 20)
+                pygame.draw.rect(screen, (40, 40, 50), highlight_rect, border_radius=10)
+                pygame.draw.rect(screen, (100, 100, 120), highlight_rect, 2, border_radius=10)
             
-            screen.blit(mode_text, (mode_x, mode_y))
+            screen.blit(mode_text, (x, y))
             
             # Описание режима
-            desc_color = (180, 190, 200) if is_selected else (140, 150, 160)
-            desc_text = small.render(config.description, True, desc_color)
-            screen.blit(desc_text, (mode_x, mode_y + 40))
+            desc_text = small.render(config.description, True, DIM)
+            desc_x = WIDTH // 2 - desc_text.get_width() // 2
+            screen.blit(desc_text, (desc_x, y + 35))
             
             # Дополнительная информация
             if mode == GameMode.CAMPAIGN:
-                info_text = 'Последовательное прохождение уровней'
-                info_color = ACCENT_WARNING
+                info_text = small.render('Последовательное прохождение уровней', True, (120, 120, 140))
             elif mode == GameMode.ENDLESS_IMMERSIVE:
-                info_text = 'Увеличивающаяся сложность, высокие очки'
-                info_color = ACCENT_DANGER
+                info_text = small.render('Увеличивающаяся сложность, высокие очки', True, (120, 120, 140))
             else:  # ENDLESS_RELAXED
-                info_text = 'Медленный темп, ограниченная скорость'
-                info_color = ACCENT_SUCCESS
+                info_text = small.render('Медленный темп, ограниченная скорость', True, (120, 120, 140))
             
-            info_surf = small.render(info_text, True, info_color)
-            screen.blit(info_surf, (mode_x, mode_y + 65))
-            
-            # Иконка режима
-            icon_rect = pygame.Rect(mode_rect.right - 60, mode_rect.y + 20, 40, 40)
-            if mode == GameMode.CAMPAIGN:
-                icon_color = ACCENT_WARNING
-            elif mode == GameMode.ENDLESS_IMMERSIVE:
-                icon_color = ACCENT_DANGER
-            else:
-                icon_color = ACCENT_SUCCESS
-            
-            pygame.draw.circle(screen, icon_color, icon_rect.center, 20)
-            pygame.draw.circle(screen, WHITE, icon_rect.center, 20, 2)
+            info_x = WIDTH // 2 - info_text.get_width() // 2
+            screen.blit(info_text, (info_x, y + 55))
         
         # Инструкции
-        controls_rect = pygame.Rect(WIDTH // 2 - 200, HEIGHT - 70, 400, 40)
-        draw_gradient_rect(screen, controls_rect, (25, 30, 38), (20, 25, 33))
-        pygame.draw.rect(screen, (50, 60, 75), controls_rect, 1, border_radius=8)
-        
-        controls_text = small.render('↑↓ - выбор, Enter - подтвердить, Esc - выход', True, WHITE)
-        controls_x = WIDTH // 2 - controls_text.get_width() // 2
-        screen.blit(controls_text, (controls_x, HEIGHT - 60))
+        controls_text = small.render('↑↓ - выбор, Enter - подтвердить, Esc - выход', True, DIM)
+        screen.blit(controls_text, (WIDTH // 2 - controls_text.get_width() // 2, HEIGHT - 50))
         
         pygame.display.flip()
 
@@ -2227,67 +1581,20 @@ def start_menu(screen, clock, font, small, audio: AudioManager):
                 if ev.key == pygame.K_UP:
                     if audio.enabled:
                         music_index = (music_index - 1) % len(audio.playlist)
-        # Enhanced background and modern UI
-        draw_enhanced_background(screen)
-        
-        # Main panel
-        main_panel = pygame.Rect(WIDTH // 2 - 300, 40, 600, HEIGHT - 100)
-        draw_enhanced_panel(screen, main_panel)
-        
-        # Title section with gradient
-        title_rect = pygame.Rect(WIDTH // 2 - 200, 60, 400, 60)
-        draw_gradient_rect(screen, title_rect, ACCENT_PRIMARY, ACCENT_SECONDARY, vertical=False)
-        pygame.draw.rect(screen, (120, 140, 170), title_rect, 2, border_radius=12)
-        
+        screen.fill(BG)
         title = font.render('TETRIS', True, WHITE)
-        title_shadow = font.render('TETRIS', True, (0, 0, 0))
-        title_x = WIDTH // 2 - title.get_width() // 2
-        screen.blit(title_shadow, (title_x + 2, 82))
-        screen.blit(title, (title_x, 80))
-        
-        # Info section
-        info_rect = pygame.Rect(WIDTH // 2 - 280, 140, 560, 40)
-        draw_gradient_rect(screen, info_rect, (35, 42, 52), (25, 32, 42))
-        pygame.draw.rect(screen, (60, 70, 85), info_rect, 1, border_radius=8)
-        
-        info = small.render('Выберите начальный уровень (← →) и музыку (↑ ↓). Enter=Старт', True, WHITE)
-        info_x = WIDTH // 2 - info.get_width() // 2
-        screen.blit(info, (info_x, 150))
-        
-        # Level selection
-        level_rect = pygame.Rect(WIDTH // 2 - 150, 200, 300, 60)
-        draw_gradient_rect(screen, level_rect, ACCENT_SUCCESS, tuple(max(0, c - 30) for c in ACCENT_SUCCESS))
-        pygame.draw.rect(screen, (80, 120, 90), level_rect, 2, border_radius=10)
-        
+        screen.blit(title, (WIDTH//2 - title.get_width()//2, 60))
+        info = small.render('Выберите начальный уровень (← →) и музыку (↑ ↓). Enter=Старт', True, DIM)
+        screen.blit(info, (WIDTH//2 - info.get_width()//2, 120))
         lvl_txt = font.render(f'Level {selected_level}', True, WHITE)
-        lvl_shadow = font.render(f'Level {selected_level}', True, (0, 0, 0))
-        lvl_x = WIDTH // 2 - lvl_txt.get_width() // 2
-        screen.blit(lvl_shadow, (lvl_x + 1, 221))
-        screen.blit(lvl_txt, (lvl_x, 220))
-        # Music section
-        music_rect = pygame.Rect(WIDTH // 2 - 200, 280, 400, 50)
-        draw_gradient_rect(screen, music_rect, (40, 35, 50), (30, 25, 40))
-        pygame.draw.rect(screen, (70, 65, 80), music_rect, 1, border_radius=8)
-        
+        screen.blit(lvl_txt, (WIDTH//2 - lvl_txt.get_width()//2, 200))
         if audio.enabled and music_index >= 0:
-            music_name = os.path.basename(audio.playlist[music_index])
-            if len(music_name) > 35:
-                music_name = music_name[:32] + "..."
-            music_txt = small.render(f'♪ {music_name}', True, ACCENT_SECONDARY)
+            music_txt = small.render(f'Music: {os.path.basename(audio.playlist[music_index])}', True, DIM)
         else:
-            music_txt = small.render('♪ Music: (none found)', True, DIM)
-        
-        music_x = WIDTH // 2 - music_txt.get_width() // 2
-        screen.blit(music_txt, (music_x, 295))
-        
-        # Start hint
-        hint_rect = pygame.Rect(WIDTH // 2 - 150, HEIGHT - 100, 300, 40)
-        draw_gradient_rect(screen, hint_rect, (25, 30, 38), (20, 25, 33))
-        pygame.draw.rect(screen, (50, 60, 75), hint_rect, 1, border_radius=8)
-        
-        start_hint = small.render('Press Enter to start', True, WHITE)
-        hint_x = WIDTH // 2 - start_hint.get_width() // 2
-        screen.blit(start_hint, (hint_x, HEIGHT - 85))
+            music_txt = small.render('Music: (none found)', True, DIM)
+        screen.blit(music_txt, (WIDTH//2 - music_txt.get_width()//2, 260))
+        start_hint = small.render('Press Enter to start', True, (200,200,200))
+        screen.blit(start_hint, (WIDTH//2 - start_hint.get_width()//2, HEIGHT - 80))
         pygame.display.flip()
     return selected_level, music_index
 
@@ -2565,7 +1872,7 @@ def run():
                                 audio.play_sfx('drop')
 
         if state.game_over:
-            draw_enhanced_background(screen)
+            screen.fill(BG)
             draw_grid(screen, ORIGIN_X, ORIGIN_Y, state)
             if state.current:
                 draw_piece(screen, ORIGIN_X, ORIGIN_Y, state.current)
@@ -2691,8 +1998,8 @@ def run():
         if state.game_mode == GameMode.CAMPAIGN:
             update_campaign_progress(state)
 
-        # Draw with enhanced animations
-        draw_enhanced_background(screen)
+        # Draw
+        screen.fill(BG)
         draw_grid(screen, ORIGIN_X, ORIGIN_Y, state)
         if state.current:
             ghost = ghost_position(state)
@@ -2700,9 +2007,9 @@ def run():
             # if animating hard-drop, draw the current piece at intermediate y
             if getattr(state, 'hard_drop_anim', False) and hasattr(state, '_anim_draw_y'):
                 temp_piece = Piece(state.current.kind, state.current.x, state._anim_draw_y, state.current.r)
-                draw_piece(screen, ORIGIN_X, ORIGIN_Y, temp_piece, animate_current=True)
+                draw_piece(screen, ORIGIN_X, ORIGIN_Y, temp_piece)
             else:
-                draw_piece(screen, ORIGIN_X, ORIGIN_Y, state.current, animate_current=True)
+                draw_piece(screen, ORIGIN_X, ORIGIN_Y, state.current)
 
         panel_x = ORIGIN_X + PLAY_W + MARGIN
         draw_panel(screen, panel_x, MARGIN, state, font, small, audio)
