@@ -1,15 +1,15 @@
 """
-TETRIS ENHANCED — улучшенная версия проекта
+TETRIS ENHANCED — итоговый файл проекта (на русском)
 Описание:
-    Улучшенная реализация Tetris на Python с pygame.
-    Улучшения:
-    - Полная адаптивность UI под разные разрешения (используя AdvancedResponsiveDesign последовательно).
-    - Обработка текстов с переносом строк и ellipsis для предотвращения overflow.
-    - Консистентные кнопки с анимациями hover/scale.
-    - Оптимизации: расширенный кэш, частичные обновления экрана, отключение анимаций на low-end.
-    - Улучшенный интерфейс: consistent spacing, доступность (контраст), поддержка мыши/клавиатуры.
-    - Safe areas и flex-like layouts для меню.
-    - Тестировано на разрешениях от 800x600 до 4K.
+    Улучшенная одностраничная реализация игры Tetris на Python c использованием pygame.
+    Включает:
+      - проигрывание фоновой музыки из папки music/ (mp3/ogg/wav);
+      - звуковые эффекты из папки sounds/ (rotate.wav, drop.wav, line.wav);
+      - стартовое меню выбора уровня и трека;
+      - меню паузы c кнопками Продолжить / Сохранить / Загрузить / Следующая / Предыдущая / Выйти;
+      - сохранение и загрузка состояния в JSON-файл (saves/tetris_save.json);
+      - механика Hold, ghost-piece, комбо и back-to-back, базовая обработка T-Spin;
+      - настраиваемые контролы: стрелки, Z/X/A/S, Space, C/Shift, P, R, Esc/Q.
 
 Установка и запуск:
     1) Убедитесь, что установлен Python 3.7+.
@@ -42,8 +42,6 @@ Enhanced Tetris (single-file) — pygame
  - Стартовое меню выбора уровня и музыкального трека
  - Меню паузы с кнопками: Продолжить, Сохранить, Загрузить, Следующая музыка, Предыдущая, Выйти
  - Меню выбора разрешения экрана
- - Полная адаптивность UI под разные разрешения
- - Оптимизации и улучшения интерфейса
 
 Положите свои mp3 (перечисленные вами) в папку ./music/
 и wav-эффекты в ./sounds/ (rotate.wav, drop.wav, line.wav)
@@ -69,7 +67,6 @@ except Exception:
     raise
 
 # -------------------- Централизованная конфигурация игры --------------------
-
 @dataclass
 class GameConfig:
     """
@@ -127,13 +124,6 @@ class GameConfig:
     auto_save_interval: int = 300  # секунд
     show_debug_info: bool = False
     
-    # Новые настройки интерфейса и доступности
-    ui_theme: str = "dark"  # "dark", "light"
-    enable_high_contrast: bool = False  # Режим высокого контраста для лучшей доступности
-    text_size_multiplier: float = 1.0  # Множитель размера текста для лучшей читаемости
-    enable_text_shadows: bool = True  # Тени текста для лучшей читаемости
-    enable_motion_effects: bool = True  # Анимации и эффекты движения
-    
     @classmethod
     def load_from_file(cls, filename: str = "config.json") -> "GameConfig":
         """Загружает конфигурацию из файла"""
@@ -161,24 +151,15 @@ class GameConfig:
                 'font_scale_multiplier': self.font_scale_multiplier,
                 'button_scale_multiplier': self.button_scale_multiplier,
                 'margin_scale_multiplier': self.margin_scale_multiplier,
-                'game_field_cols': self.game_field_cols,
-                'game_field_rows': self.game_field_rows,
-                'block_size_base': self.block_size_base,
                 'enable_audio': self.enable_audio,
                 'music_volume': self.music_volume,
                 'sound_volume': self.sound_volume,
                 'enable_animations': self.enable_animations,
                 'enable_shadows': self.enable_shadows,
                 'render_quality': self.render_quality,
-                'cache_size_multiplier': self.cache_size_multiplier,
                 'auto_save_enabled': self.auto_save_enabled,
                 'auto_save_interval': self.auto_save_interval,
-                'show_debug_info': self.show_debug_info,
-                'ui_theme': self.ui_theme,
-                'enable_high_contrast': self.enable_high_contrast,
-                'text_size_multiplier': self.text_size_multiplier,
-                'enable_text_shadows': self.enable_text_shadows,
-                'enable_motion_effects': self.enable_motion_effects
+                'show_debug_info': self.show_debug_info
             }
             
             with open(filename, 'w', encoding='utf-8') as f:
@@ -237,7 +218,6 @@ class GameConfig:
 game_config = GameConfig.load_from_file()  # Загружаем сохраненную конфигурацию
 
 # -------------------- Game Modes --------------------
-
 class GameMode(Enum):
     """Перечисление игровых режимов"""
     CAMPAIGN = "campaign"      # Кампания - прохождение уровней с целями
@@ -355,9 +335,7 @@ CAMPAIGN_LEVELS = [
         unlocked=False
     )
 ]
-
 # -------------------- Улучшенная адаптивная дизайн система --------------------
-
 class AdvancedResponsiveDesign:
     """
     Кардинально улучшенная система адаптивного дизайна с интеллектуальным
@@ -589,7 +567,6 @@ class AdvancedResponsiveDesign:
         """Создаёт pygame.Rect с масштабированными координатами"""
         import pygame
         return pygame.Rect(x, y, width, height)
-
     def scale_font(self, base_font_size: int) -> int:
         """Интеллектуальное масштабирование шрифтов с кэшированием"""
         if base_font_size in self._unified_cache['fonts']:
@@ -796,6 +773,115 @@ class AdvancedResponsiveDesign:
         self._unified_cache['layouts'][cache_key] = result
         return result
     
+    def get_optimal_layout(self) -> dict:
+        """Возвращает оптимальную компоновку для текущего экрана"""
+        cache_key = f"layout_{self.screen_width}_{self.screen_height}_{self.aspect_type}"
+        
+        if cache_key in self._unified_cache['layouts']:
+            return self._unified_cache['layouts'][cache_key]
+        
+        # Анализ типа экрана и определение оптимальной компоновки
+        if self.aspect_type in ["21:9", "32:9"]:
+            # Ультраширокие экраны - центрированная компоновка
+            layout_type = "centered_wide"
+            side_margins = self.scale_width(150)  # Большие боковые отступы
+            content_ratio = 0.7  # 70% экрана для контента
+        elif self.aspect_type == "16:9" and self.device_class in ["high", "ultra_high"]:
+            # Широкие экраны с высоким разрешением
+            layout_type = "wide_optimized"
+            side_margins = self.scale_width(80)
+            content_ratio = 0.85
+        elif self.aspect_type in ["4:3", "5:4"]:
+            # Квадратные экраны - компактная компоновка
+            layout_type = "compact"
+            side_margins = self.scale_width(30)
+            content_ratio = 0.95
+        else:
+            # Стандартная компоновка
+            layout_type = "standard"
+            side_margins = self.scale_width(50)
+            content_ratio = 0.9
+        
+        # Вертикальные отступы
+        top_margin = self.scale_height(40)
+        bottom_margin = self.scale_height(30)
+        
+        layout = {
+            'layout_type': layout_type,
+            'side_margins': side_margins,
+            'top_margin': top_margin,
+            'bottom_margin': bottom_margin,
+            'content_ratio': content_ratio,
+            'safe_area': {
+                'x': side_margins,
+                'y': top_margin,
+                'width': self.screen_width - 2 * side_margins,
+                'height': self.screen_height - top_margin - bottom_margin
+            }
+        }
+        
+        self._unified_cache['layouts'][cache_key] = layout
+        return layout
+    
+    def get_responsive_grid(self, total_items: int, container_width: int, container_height: int,
+                           item_min_width: int = 120, item_min_height: int = 80,
+                           max_columns: int = None) -> dict:
+        """Возвращает оптимальную сетку для размещения элементов"""
+        cache_key = f"grid_{total_items}_{container_width}_{container_height}_{item_min_width}_{item_min_height}_{max_columns}"
+        
+        if cache_key in self._unified_cache['layouts']:
+            return self._unified_cache['layouts'][cache_key]
+        
+        # Масштабирование минимальных размеров
+        scaled_min_width = self.scale_width(item_min_width)
+        scaled_min_height = self.scale_height(item_min_height)
+        
+        # Отступы между элементами
+        gap_x = self.get_margin(15)
+        gap_y = self.get_margin(10)
+        
+        # Определяем оптимальное количество колонок
+        max_cols_by_width = (container_width + gap_x) // (scaled_min_width + gap_x)
+        max_cols_by_aspect = {
+            "21:9": 6, "32:9": 8, "16:9": 4, "16:10": 4, "4:3": 3, "5:4": 3
+        }.get(self.aspect_type, 4)
+        
+        if max_columns:
+            cols = min(max_columns, max_cols_by_width, max_cols_by_aspect)
+        else:
+            cols = min(max_cols_by_width, max_cols_by_aspect)
+        
+        cols = max(1, min(cols, total_items))  # Не больше чем элементов
+        rows = (total_items + cols - 1) // cols
+        
+        # Вычисляем фактические размеры элементов
+        available_width = container_width - (cols - 1) * gap_x
+        available_height = container_height - (rows - 1) * gap_y
+        
+        item_width = max(scaled_min_width, available_width // cols)
+        item_height = max(scaled_min_height, available_height // rows)
+        
+        # Оптимизация для малого количества элементов
+        if total_items <= 3 and self.aspect_type in ["21:9", "32:9"]:
+            # На ультрашироких экранах размещаем в одну строку
+            cols = total_items
+            rows = 1
+            item_width = min(self.scale_width(250), available_width // cols)
+        
+        result = {
+            'columns': cols,
+            'rows': rows,
+            'item_width': item_width,
+            'item_height': item_height,
+            'gap_x': gap_x,
+            'gap_y': gap_y,
+            'total_width': cols * item_width + (cols - 1) * gap_x,
+            'total_height': rows * item_height + (rows - 1) * gap_y
+        }
+        
+        self._unified_cache['layouts'][cache_key] = result
+        return result
+    
     def get_adaptive_spacing(self, context: str = "default") -> dict:
         """Возвращает адаптивные отступы для разных типов элементов"""
         cache_key = f"spacing_{context}_{self.device_class}_{self.aspect_type}"
@@ -871,6 +957,131 @@ class AdvancedResponsiveDesign:
             
             scaled_size = max(min_sizes.get(key, 14), scaled_size)
             result[key] = scaled_size
+        
+        self._unified_cache['layouts'][cache_key] = result
+        return result
+        self._unified_cache['layouts'][cache_key] = result
+        return result
+    
+    def get_responsive_grid(self, items_count: int, container_width: int, container_height: int, 
+                           item_min_width: int = 100, item_min_height: int = 60) -> dict:
+        """Возвращает оптимальную сетку для размещения элементов"""
+        cache_key = f"grid_{items_count}_{container_width}_{container_height}_{item_min_width}_{item_min_height}"
+        
+        if cache_key in self._unified_cache['layouts']:
+            return self._unified_cache['layouts'][cache_key]
+        
+        # Адаптивные отступы
+        margin = self.get_margin(10)
+        spacing = self.get_margin(8)
+        
+        # Вычисление оптимального количества колонок
+        max_cols = max(1, (container_width + spacing) // (item_min_width + spacing))
+        
+        # Подбор оптимального количества колонок
+        best_cols = 1
+        best_score = float('inf')
+        
+        for cols in range(1, max_cols + 1):
+            rows = (items_count + cols - 1) // cols
+            
+            # Вычисляем размеры элементов
+            available_width = container_width - margin * 2 - spacing * (cols - 1)
+            available_height = container_height - margin * 2 - spacing * (rows - 1)
+            
+            item_width = available_width // cols
+            item_height = available_height // rows
+            
+            # Проверяем минимальные требования
+            if item_width >= item_min_width and item_height >= item_min_height:
+                # Оценка качества компоновки (предпочитаем квадратные элементы)
+                aspect_ratio = item_width / item_height
+                ideal_ratio = 1.6  # Золотое сечение
+                ratio_score = abs(aspect_ratio - ideal_ratio)
+                
+                # Штраф за пустые ячейки
+                empty_cells = cols * rows - items_count
+                empty_penalty = empty_cells * 0.5
+                
+                total_score = ratio_score + empty_penalty
+                
+                if total_score < best_score:
+                    best_score = total_score
+                    best_cols = cols
+        
+        # Финальные вычисления
+        final_rows = (items_count + best_cols - 1) // best_cols
+        available_width = container_width - margin * 2 - spacing * (best_cols - 1)
+        available_height = container_height - margin * 2 - spacing * (final_rows - 1)
+        
+        item_width = available_width // best_cols
+        item_height = available_height // final_rows
+        
+        result = {
+            'cols': best_cols,
+            'rows': final_rows,
+            'item_width': item_width,
+            'item_height': item_height,
+            'margin': margin,
+            'spacing': spacing,
+            'total_width': best_cols * item_width + spacing * (best_cols - 1),
+            'total_height': final_rows * item_height + spacing * (final_rows - 1)
+        }
+        
+        self._unified_cache['layouts'][cache_key] = result
+        return result
+    
+    def get_adaptive_spacing(self, element_type: str, context: str = "default") -> dict:
+        """Возвращает адаптивные отступы для различных типов элементов"""
+        cache_key = f"spacing_{element_type}_{context}"
+        
+        if cache_key in self._unified_cache['layouts']:
+            return self._unified_cache['layouts'][cache_key]
+        
+        # Базовые конфигурации отступов
+        base_configs = {
+            "button": {"padding": 15, "margin": 10, "spacing": 8},
+            "panel": {"padding": 20, "margin": 15, "spacing": 12},
+            "text": {"padding": 8, "margin": 6, "spacing": 4},
+            "list_item": {"padding": 12, "margin": 8, "spacing": 6},
+            "menu_item": {"padding": 16, "margin": 12, "spacing": 10}
+        }
+        
+        base_config = base_configs.get(element_type, base_configs["button"])
+        
+        # Масштабирование с учетом устройства
+        ui_scale = self.scale_factors['ui']
+        
+        # Адаптация под контекст
+        context_multipliers = {
+            "compact": 0.7,
+            "comfortable": 1.3,
+            "spacious": 1.6,
+            "default": 1.0
+        }
+        
+        context_mult = context_multipliers.get(context, 1.0)
+        
+        # Адаптация под тип экрана
+        aspect_multipliers = {
+            "32:9": 1.2,  # Больше места на ультраширокий экранах
+            "21:9": 1.15,
+            "16:9": 1.1,
+            "16:10": 1.05,
+            "4:3": 0.9,   # Меньше места на квадратных экранах
+            "5:4": 0.95
+        }
+        
+        aspect_mult = aspect_multipliers.get(self.aspect_type, 1.0)
+        
+        # Финальные вычисления
+        final_multiplier = ui_scale * context_mult * aspect_mult
+        
+        result = {
+            'padding': max(4, int(base_config["padding"] * final_multiplier)),
+            'margin': max(3, int(base_config["margin"] * final_multiplier)),
+            'spacing': max(2, int(base_config["spacing"] * final_multiplier))
+        }
         
         self._unified_cache['layouts'][cache_key] = result
         return result
@@ -1085,42 +1296,6 @@ class AdvancedResponsiveDesign:
             }
         
         return best_layout
-    
-    def render_adaptive_text(self, screen, text: str, font, rect: pygame.Rect, color, ellipsis=True, align='center'):
-        """Рендерит текст с переносом/обрезкой, чтобы помещался в rect."""
-        words = text.split(' ')
-        lines = []
-        current_line = []
-        max_width = rect.width - 20  # padding
-        
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            test_surf = font.render(test_line, True, color)
-            if test_surf.get_width() <= max_width:
-                current_line.append(word)
-            else:
-                if current_line:
-                    lines.append(' '.join(current_line))
-                current_line = [word]
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        # Если слишком много строк — обрезаем с ellipsis
-        max_lines = rect.height // font.get_height()
-        if len(lines) > max_lines and ellipsis:
-            lines = lines[:max_lines-1] + [lines[max_lines-1][:int(max_width / font.size(' ')[0] - 3)] + '...']
-        
-        # Рендер строк
-        y = rect.y + 10  # padding
-        for line in lines:
-            surf = font.render(line, True, color)
-            if align == 'center':
-                x = rect.x + (rect.width - surf.get_width()) // 2
-            else:
-                x = rect.x + 10
-            screen.blit(surf, (x, y))
-            y += font.get_height()
     
     def get_smart_positioning(self, element_width: int, element_height: int, 
                             container_width: int, container_height: int, 
@@ -2701,20 +2876,12 @@ def draw_enhanced_adaptive_button(surface, rect: pygame.Rect, text: str,
     return rect
 def draw_gradient_rect(surf, rect, color_top, color_bottom, vertical=True, animated=False):
     """Рисует прямоугольник с плавным градиентом"""
-    global game_config
-    
-    # Применяем настройки темы
-    if game_config.enable_high_contrast:
-        # В режиме высокого контраста используем сплошные цвета вместо градиентов
-        solid_color = (255, 255, 255) if sum(color_top) > 382 else (0, 0, 0)  # Белый или черный
-        pygame.draw.rect(surf, solid_color, rect)
-        return
-    elif game_config.ui_theme == "light":
-        # Для светлой темы инвертируем цвета
-        color_top = tuple(255 - c for c in color_top)
-        color_bottom = tuple(255 - c for c in color_bottom)
-    
     gradient_surf = pygame.Surface((rect.width, rect.height))
+    
+    # Анимированные цвета для плавных эффектов
+    if animated:
+        color_top = glow_color(color_top, 0.2, 0)
+        color_bottom = glow_color(color_bottom, 0.2, 0.5)
     
     if vertical:
         for y in range(rect.height):
@@ -2749,8 +2916,6 @@ def draw_shadow(surf, rect, offset=(3, 3), blur=2, color=PANEL_SHADOW):
 
 def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
     """Рисует улучшенную панель с плавными эффектами"""
-    global game_config
-    
     # Многослойная тень для глубины
     for i in range(3):
         shadow_offset = (2 + i, 2 + i)
@@ -2759,12 +2924,7 @@ def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
         shadow_rect.x += shadow_offset[0]
         shadow_rect.y += shadow_offset[1]
         shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-        
-        # Применяем настройки темы к теням
-        if game_config.enable_high_contrast:
-            shadow_surf.fill((0, 0, 0, shadow_alpha))  # Черные тени в режиме высокого контраста
-        else:
-            shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
+        shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
         surf.blit(shadow_surf, shadow_rect.topleft)
     
     # Основной фон с плавным градиентом
@@ -2775,67 +2935,31 @@ def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
         panel_top = (35, 40, 50)
         panel_bottom = (25, 30, 38)
     
-    # Применяем настройки темы к панели
-    if game_config.enable_high_contrast:
-        # В режиме высокого контраста используем сплошной цвет
-        pygame.draw.rect(surf, (0, 0, 0), rect)
-    elif game_config.ui_theme == "light":
-        # Для светлой темы используем светлые цвета
-        panel_top = tuple(255 - c for c in panel_top)
-        panel_bottom = tuple(255 - c for c in panel_bottom)
-        draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
-    else:
-        draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
+    draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
     
     # Многослойная рамка
     # Основная рамка
     border_color = glow_color(PANEL_BORDER, 0.1, 0) if animated else PANEL_BORDER
-    
-    # Применяем настройки темы к рамке
-    if game_config.enable_high_contrast:
-        border_color = (255, 255, 255)  # Белая рамка в режиме высокого контраста
-    elif game_config.ui_theme == "light":
-        border_color = tuple(255 - c for c in border_color)
-    
     pygame.draw.rect(surf, border_color, rect, 2, border_radius=12)
     
     # Внутренняя подсветка
     inner_rect = rect.copy()
     inner_rect.inflate(-4, -4)
     inner_color = (45, 52, 65) if not animated else glow_color((45, 52, 65), 0.2, 0.7)
-    
-    # Применяем настройки темы к внутренней подсветке
-    if game_config.enable_high_contrast:
-        inner_color = (255, 255, 255)  # Белая подсветка в режиме высокого контраста
-    elif game_config.ui_theme == "light":
-        inner_color = tuple(255 - c for c in inner_color)
-    
     pygame.draw.rect(surf, inner_color, inner_rect, 1, border_radius=10)
     
     # Наружное свечение (для анимированных панелей)
-    if animated and not game_config.enable_high_contrast:
+    if animated:
         glow_rect = rect.copy()
         glow_rect.inflate(4, 4)
         glow_alpha = int(20 + 15 * pulse_effect(0, 0.5))
         glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-        
-        # Применяем настройки темы к свечению
-        if game_config.ui_theme == "light":
-            glow_surf.fill((255, 255, 255, glow_alpha))  # Белое свечение для светлой темы
-        else:
-            glow_surf.fill((*ACCENT_PRIMARY, glow_alpha))
+        glow_surf.fill((*ACCENT_PRIMARY, glow_alpha))
         surf.blit(glow_surf, glow_rect.topleft)
     
     # Заголовок (если указан)
     if title and font:
         title_color = glow_color(WHITE, 0.1, 0) if animated else WHITE
-        
-        # Применяем настройки темы к заголовку
-        if game_config.enable_high_contrast:
-            title_color = (255, 255, 255)  # Белый заголовок в режиме высокого контраста
-        elif game_config.ui_theme == "light":
-            title_color = (0, 0, 0)  # Черный заголовок для светлой темы
-        
         title_surf = font.render(title, True, title_color)
         title_x = rect.x + (rect.width - title_surf.get_width()) // 2
         title_y = rect.y + 10
@@ -4066,7 +4190,6 @@ def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False, active
     """
     Расширенная функция отрисовки кнопок с продвинутыми эффектами и анимацией.
     """
-    global game_config
     current_time = time.time()
     
     # Прогрессивный эффект клика с микро-анимацией
@@ -4101,188 +4224,90 @@ def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False, active
     hover_multiplier = smooth_lerp(0.0, 1.0, transition_progress) if hover else 0.0
     pulse_intensity = pulse_effect(current_time, 1.0, 0.2) if hover else 0.0
     
-    # Применяем настройки темы и высокого контраста
-    if game_config.enable_high_contrast:
-        # Режим высокого контраста для лучшей доступности
+    if style == "primary":
         if active:
-            bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-            border_color = (255, 255, 255)
-            text_color = (255, 255, 255)
+            bg_top, bg_bottom = (45, 110, 180), (35, 90, 160)
+            border_color = (60, 130, 200)
+            text_color = WHITE
         elif hover:
-            bg_top, bg_bottom = (255, 255, 255), (255, 255, 255)
-            border_color = (0, 0, 0)
-            text_color = (0, 0, 0)
+            # Прогрессивный переход с пульсацией
+            base_top, base_bottom = (64, 146, 245), (44, 126, 225)
+            hover_top, hover_bottom = (104, 186, 255), (84, 166, 255)
+            click_boost = click_intensity * 20
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 15 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 12 + click_boost)) for i in range(3))
+            border_color = glow_color((120, 200, 255), 0.4 + pulse_intensity * 0.2, current_time)
+            text_color = glow_color(WHITE, 0.15 + pulse_intensity * 0.1, current_time)
         else:
-            if style == "primary":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 255, 255)
-                text_color = (255, 255, 255)
-            elif style == "success":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (0, 255, 0)
-                text_color = (0, 255, 0)
-            elif style == "danger":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 0, 0)
-                text_color = (255, 0, 0)
-            else:
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 255, 255)
-                text_color = (255, 255, 255)
-    elif game_config.ui_theme == "light":
-        # Светлая тема
+            bg_top, bg_bottom = (64, 146, 245), (44, 126, 225)
+            border_color = (80, 160, 240)
+            text_color = WHITE
+            
+    elif style == "success":
         if active:
-            bg_top, bg_bottom = (200, 200, 200), (180, 180, 180)
-            border_color = (100, 100, 100)
-            text_color = (0, 0, 0)
+            bg_top, bg_bottom = (30, 150, 90), (25, 130, 75)
+            border_color = (45, 170, 105)
+            text_color = WHITE
         elif hover:
-            if style == "primary":
-                base_top, base_bottom = (180, 220, 255), (160, 200, 235)
-                hover_top, hover_bottom = (220, 240, 255), (200, 220, 235)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 15 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 12 + click_boost)) for i in range(3))
-                border_color = glow_color((100, 150, 200), 0.4 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color((0, 0, 0), 0.15 + pulse_intensity * 0.1, current_time)
-            elif style == "success":
-                base_top, base_bottom = (200, 255, 220), (180, 235, 200)
-                hover_top, hover_bottom = (240, 255, 240), (220, 235, 220)
-                click_boost = click_intensity * 25
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 20 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((0, 150, 50), 0.5 + pulse_intensity * 0.3, current_time)
-                text_color = glow_color((0, 0, 0), 0.2 + pulse_intensity * 0.15, current_time)
-            elif style == "danger":
-                base_top, base_bottom = (255, 200, 200), (235, 180, 180)
-                hover_top, hover_bottom = (255, 240, 240), (235, 220, 220)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 18 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((150, 50, 50), 0.3 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color((0, 0, 0), 0.1 + pulse_intensity * 0.1, current_time)
-            else:
-                base_top, base_bottom = (220, 220, 220), (200, 200, 200)
-                hover_top, hover_bottom = (240, 240, 240), (220, 220, 220)
-                click_boost = click_intensity * 15
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 12 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 8 + click_boost)) for i in range(3))
-                border_color = glow_color((100, 100, 100), 0.2 + pulse_intensity * 0.15, current_time)
-                text_color = glow_color((0, 0, 0), 0.1 + pulse_intensity * 0.08, current_time)
+            base_top, base_bottom = (40, 200, 120), (30, 180, 100)
+            hover_top, hover_bottom = (80, 240, 160), (70, 220, 140)
+            click_boost = click_intensity * 25
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 20 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 15 + click_boost)) for i in range(3))
+            border_color = glow_color((80, 255, 160), 0.5 + pulse_intensity * 0.3, current_time)
+            text_color = glow_color(WHITE, 0.2 + pulse_intensity * 0.15, current_time)
         else:
-            if style == "primary":
-                bg_top, bg_bottom = (180, 220, 255), (160, 200, 235)
-                border_color = (100, 150, 200)
-                text_color = (0, 0, 0)
-            elif style == "success":
-                bg_top, bg_bottom = (200, 255, 220), (180, 235, 200)
-                border_color = (0, 150, 50)
-                text_color = (0, 0, 0)
-            elif style == "danger":
-                bg_top, bg_bottom = (255, 200, 200), (235, 180, 180)
-                border_color = (150, 50, 50)
-                text_color = (0, 0, 0)
-            else:
-                bg_top, bg_bottom = (220, 220, 220), (200, 200, 200)
-                border_color = (100, 100, 100)
-                text_color = (0, 0, 0)
-    else:
-        # Темная тема (по умолчанию)
-        if style == "primary":
-            if active:
-                bg_top, bg_bottom = (45, 110, 180), (35, 90, 160)
-                border_color = (60, 130, 200)
-                text_color = WHITE
-            elif hover:
-                # Прогрессивный переход с пульсацией
-                base_top, base_bottom = (64, 146, 245), (44, 126, 225)
-                hover_top, hover_bottom = (104, 186, 255), (84, 166, 255)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 15 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 12 + click_boost)) for i in range(3))
-                border_color = glow_color((120, 200, 255), 0.4 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color(WHITE, 0.15 + pulse_intensity * 0.1, current_time)
-            else:
-                bg_top, bg_bottom = (64, 146, 245), (44, 126, 225)
-                border_color = (80, 160, 240)
-                text_color = WHITE
-                
-        elif style == "success":
-            if active:
-                bg_top, bg_bottom = (30, 150, 90), (25, 130, 75)
-                border_color = (45, 170, 105)
-                text_color = WHITE
-            elif hover:
-                base_top, base_bottom = (40, 200, 120), (30, 180, 100)
-                hover_top, hover_bottom = (80, 240, 160), (70, 220, 140)
-                click_boost = click_intensity * 25
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 20 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((80, 255, 160), 0.5 + pulse_intensity * 0.3, current_time)
-                text_color = glow_color(WHITE, 0.2 + pulse_intensity * 0.15, current_time)
-            else:
-                bg_top, bg_bottom = (40, 200, 120), (30, 180, 100)
-                border_color = (55, 215, 135)
-                text_color = WHITE
-                
-        elif style == "danger":
-            if active:
-                bg_top, bg_bottom = (180, 40, 50), (160, 30, 40)
-                border_color = (200, 55, 65)
-                text_color = WHITE
-            elif hover:
-                base_top, base_bottom = (220, 53, 69), (200, 43, 59)
-                hover_top, hover_bottom = (255, 93, 109), (235, 73, 89)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 18 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((255, 108, 124), 0.3 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color(WHITE, 0.1 + pulse_intensity * 0.1, current_time)
-            else:
-                bg_top, bg_bottom = (220, 53, 69), (200, 43, 59)
-                border_color = (235, 68, 84)
-                text_color = WHITE
-                
-        else:  # default - максимально оптимизированные базовые кнопки
-            if active:
-                bg_top, bg_bottom = BUTTON_BG_ACTIVE, tuple(max(0, c - 12) for c in BUTTON_BG_ACTIVE)
-                border_color = BUTTON_BORDER_HOVER
-                text_color = BUTTON_TEXT_HOVER
-            elif hover:
-                base_top, base_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-                hover_top, hover_bottom = BUTTON_BG_HOVER, tuple(max(0, c - 10) for c in BUTTON_BG_HOVER)
-                click_boost = click_intensity * 15
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 12 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 8 + click_boost)) for i in range(3))
-                border_color = glow_color(BUTTON_BORDER_HOVER, 0.2 + pulse_intensity * 0.15, current_time)
-                text_color = glow_color(BUTTON_TEXT_HOVER, 0.1 + pulse_intensity * 0.08, current_time)
-            else:
-                bg_top, bg_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-                border_color = BUTTON_BORDER
-                text_color = BUTTON_TEXT
+            bg_top, bg_bottom = (40, 200, 120), (30, 180, 100)
+            border_color = (55, 215, 135)
+            text_color = WHITE
+            
+    elif style == "danger":
+        if active:
+            bg_top, bg_bottom = (180, 40, 50), (160, 30, 40)
+            border_color = (200, 55, 65)
+            text_color = WHITE
+        elif hover:
+            base_top, base_bottom = (220, 53, 69), (200, 43, 59)
+            hover_top, hover_bottom = (255, 93, 109), (235, 73, 89)
+            click_boost = click_intensity * 20
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 18 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 15 + click_boost)) for i in range(3))
+            border_color = glow_color((255, 108, 124), 0.3 + pulse_intensity * 0.2, current_time)
+            text_color = glow_color(WHITE, 0.1 + pulse_intensity * 0.1, current_time)
+        else:
+            bg_top, bg_bottom = (220, 53, 69), (200, 43, 59)
+            border_color = (235, 68, 84)
+            text_color = WHITE
+            
+    else:  # default - максимально оптимизированные базовые кнопки
+        if active:
+            bg_top, bg_bottom = BUTTON_BG_ACTIVE, tuple(max(0, c - 12) for c in BUTTON_BG_ACTIVE)
+            border_color = BUTTON_BORDER_HOVER
+            text_color = BUTTON_TEXT_HOVER
+        elif hover:
+            base_top, base_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
+            hover_top, hover_bottom = BUTTON_BG_HOVER, tuple(max(0, c - 10) for c in BUTTON_BG_HOVER)
+            click_boost = click_intensity * 15
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 12 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 8 + click_boost)) for i in range(3))
+            border_color = glow_color(BUTTON_BORDER_HOVER, 0.2 + pulse_intensity * 0.15, current_time)
+            text_color = glow_color(BUTTON_TEXT_HOVER, 0.1 + pulse_intensity * 0.08, current_time)
+        else:
+            bg_top, bg_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
+            border_color = BUTTON_BORDER
+            text_color = BUTTON_TEXT
     
     # Продвинутый градиентный фон с анимацией
     draw_gradient_rect(surface, display_rect, bg_top, bg_bottom, animated=hover or click_effect)
@@ -5208,18 +5233,8 @@ def pause_menu(screen, clock, font, small, audio: AudioManager, state: GameState
                                     return ('resolution_changed', new_screen)
                         except Exception as e:
                             print(f"[Ошибка] Не удалось открыть меню разрешения: {e}")
-                    elif action == 'next': 
-                        # Сохраняем индекс трека в игровом контексте, если переключаем из паузы
-                        audio.next()
-                        if audio.current_context == 'pause' and original_context == 'game':
-                            # Синхронизируем индекс паузы с индексом игры
-                            audio.game_index = audio.pause_index
-                    elif action == 'prev': 
-                        # Сохраняем индекс трека в игровом контексте, если переключаем из паузы
-                        audio.prev()
-                        if audio.current_context == 'pause' and original_context == 'game':
-                            # Синхронизируем индекс паузы с индексом игры
-                            audio.game_index = audio.pause_index
+                    elif action == 'next': audio.next()
+                    elif action == 'prev': audio.prev()
                     elif action == 'main_menu': 
                         # Не восстанавливаем контекст - он будет переключён на menu в основном цикле
                         return 'main_menu'
@@ -5498,7 +5513,7 @@ def run():
     clock = pygame.time.Clock()
     
     # Используем адаптивные размеры шрифтов
-    font_size = responsive.scale_font(25) if responsive else 25
+    font_size = responsive.scale_font(48) if responsive else 48
     small_size = responsive.scale_font(20) if responsive else 20
     
     # Используем шрифты с поддержкой кириллицы

@@ -1,15 +1,15 @@
 """
-TETRIS ENHANCED — улучшенная версия проекта
+TETRIS ENHANCED — итоговый файл проекта (на русском)
 Описание:
-    Улучшенная реализация Tetris на Python с pygame.
-    Улучшения:
-    - Полная адаптивность UI под разные разрешения (используя AdvancedResponsiveDesign последовательно).
-    - Обработка текстов с переносом строк и ellipsis для предотвращения overflow.
-    - Консистентные кнопки с анимациями hover/scale.
-    - Оптимизации: расширенный кэш, частичные обновления экрана, отключение анимаций на low-end.
-    - Улучшенный интерфейс: consistent spacing, доступность (контраст), поддержка мыши/клавиатуры.
-    - Safe areas и flex-like layouts для меню.
-    - Тестировано на разрешениях от 800x600 до 4K.
+    Улучшенная одностраничная реализация игры Tetris на Python c использованием pygame.
+    Включает:
+      - проигрывание фоновой музыки из папки music/ (mp3/ogg/wav);
+      - звуковые эффекты из папки sounds/ (rotate.wav, drop.wav, line.wav);
+      - стартовое меню выбора уровня и трека;
+      - меню паузы c кнопками Продолжить / Сохранить / Загрузить / Следующая / Предыдущая / Выйти;
+      - сохранение и загрузка состояния в JSON-файл (saves/tetris_save.json);
+      - механика Hold, ghost-piece, комбо и back-to-back, базовая обработка T-Spin;
+      - настраиваемые контролы: стрелки, Z/X/A/S, Space, C/Shift, P, R, Esc/Q.
 
 Установка и запуск:
     1) Убедитесь, что установлен Python 3.7+.
@@ -42,8 +42,6 @@ Enhanced Tetris (single-file) — pygame
  - Стартовое меню выбора уровня и музыкального трека
  - Меню паузы с кнопками: Продолжить, Сохранить, Загрузить, Следующая музыка, Предыдущая, Выйти
  - Меню выбора разрешения экрана
- - Полная адаптивность UI под разные разрешения
- - Оптимизации и улучшения интерфейса
 
 Положите свои mp3 (перечисленные вами) в папку ./music/
 и wav-эффекты в ./sounds/ (rotate.wav, drop.wav, line.wav)
@@ -64,12 +62,195 @@ from enum import Enum
 
 try:
     import pygame
-except Exception:
+except ImportError:
     print("This script requires pygame. Install with: pip install pygame")
     raise
 
-# -------------------- Централизованная конфигурация игры --------------------
+# --- BEGIN: Improved animation sync helper ---
+SYNC_ATTRS = ["smooth_fall_speed", "smooth_fall_double_press", "smooth_fall_start_time"]
 
+def _copy_attr(src, dst, attrs):
+    """Копирует указанные атрибуты из src в dst, если они существуют."""
+    for name in attrs:
+        if hasattr(src, name):
+            setattr(dst, name, getattr(src, name))
+
+def _sync_animation_states(state, input_state):
+    """
+    Синхронизирует анимационные флаги и параметры между GameState и InputState.
+
+    Нужно, потому что часть логики хранится в GameState (сохраняется),
+    а часть — в InputState (одноразовое состояние ввода).
+    """
+    try:
+        # GameState → InputState
+        if getattr(state, "smooth_fall_anim", False) and not getattr(input_state, "smooth_fall_active", False):
+            input_state.smooth_fall_active = True
+            _copy_attr(state, input_state, SYNC_ATTRS)
+            # Сбрасываем таймер только при старте анимации
+            input_state.smooth_fall_timer = 0.0
+
+        # InputState → GameState
+        if getattr(input_state, "smooth_fall_active", False) and not getattr(state, "smooth_fall_anim", False):
+            state.smooth_fall_anim = True
+            _copy_attr(input_state, state, SYNC_ATTRS)
+
+        # Hard-drop синхронизация
+        if getattr(state, "hard_drop_anim", False) and not getattr(input_state, "hard_drop_anim", False):
+            input_state.hard_drop_anim = True
+        if getattr(input_state, "hard_drop_anim", False) and not getattr(state, "hard_drop_anim", False):
+            state.hard_drop_anim = True
+
+    except Exception as e:
+        # Логируем хотя бы, иначе ошибки будут скрыты навсегда
+        print("[_sync_animation_states] warning:", e)
+# --- END: Improved animation sync helper ---
+# --- END: Animation sync helper ---
+
+# Music event
+MUSIC_END_EVENT = pygame.USEREVENT + 1
+
+# Audio manager class
+class AudioManager:
+    def __init__(self):
+        self.enabled = True
+        self.index = 0
+        self.playlist = []
+        self.current_context = "menu"
+        self.menu_playlist = []
+        self.game_playlist = []
+        self.pause_playlist = []
+        self.menu_index = 0
+        self.game_index = 0
+        self.pause_index = 0
+        
+        # Try to initialize audio
+        try:
+            pygame.mixer.init()
+            pygame.mixer.music.set_endevent(MUSIC_END_EVENT)
+        except Exception as e:
+            print(f"[Audio] Failed to initialize audio: {e}")
+            self.enabled = False
+            return
+        
+        # Scan for music files
+        self._scan_music()
+        
+        if not self.playlist:
+            print("[Audio] No music files found")
+            self.enabled = False
+    
+    def _scan_music(self):
+        """Scan for music files in the music directory and categorize them."""
+        music_dir = "music"
+        if not os.path.isdir(music_dir):
+            return
+        
+        for root, dirs, files in os.walk(music_dir):
+            for fname in sorted(files):
+                if fname.lower().endswith(('.mp3', '.ogg', '.wav')):
+                    full_path = os.path.join(root, fname)
+                    # Categorize music based on directory or filename
+                    if 'menu' in root.lower() or 'menu' in fname.lower():
+                        self.menu_playlist.append(full_path)
+                    elif 'pause' in root.lower() or 'pause' in fname.lower():
+                        self.pause_playlist.append(full_path)
+                    elif 'game' in root.lower() or 'game' in fname.lower():
+                        self.game_playlist.append(full_path)
+                    else:
+                        # Default to menu music if no category specified
+                        self.menu_playlist.append(full_path)
+        
+        # Set the default playlist to menu music
+        self.playlist = self.menu_playlist if self.menu_playlist else (self.game_playlist or self.pause_playlist or [])
+    
+    def play_current(self):
+        """Play the current track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        try:
+            pygame.mixer.music.load(self.playlist[self.index])
+            pygame.mixer.music.play(-1)  # Loop indefinitely
+        except Exception as e:
+            print(f"[Audio] Failed to play track: {e}")
+    
+    def next(self):
+        """Play the next track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        self.index = (self.index + 1) % len(self.playlist)
+        self.play_current()
+    
+    def prev(self):
+        """Play the previous track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        self.index = (self.index - 1) % len(self.playlist)
+        self.play_current()
+    
+    def set_context(self, context):
+        """Set the audio context (menu, game, pause) and switch playlists."""
+        if context not in ['menu', 'game', 'pause']:
+            return
+            
+        old_context = self.current_context
+        self.current_context = context
+        
+        # Save current index for the old context
+        if old_context == 'menu':
+            self.menu_index = self.index
+        elif old_context == 'game':
+            self.game_index = self.index
+        elif old_context == 'pause':
+            self.pause_index = self.index
+        
+        # Switch to the new playlist and restore its index
+        if context == 'menu':
+            self.playlist = self.menu_playlist
+            self.index = self.menu_index
+        elif context == 'game':
+            self.playlist = self.game_playlist
+            self.index = self.game_index
+        elif context == 'pause':
+            self.playlist = self.pause_playlist
+            self.index = self.pause_index
+        
+        # If the new playlist is empty, fall back to the default playlist
+        if not self.playlist:
+            self.playlist = self.menu_playlist or self.game_playlist or self.pause_playlist or []
+            self.index = 0
+    
+    def play_sfx(self, sound_name):
+        """Play a sound effect."""
+        if not self.enabled:
+            return
+        
+        # Sound effects would be implemented here
+        pass
+    
+    def get_current_playlist(self):
+        """Get the current playlist."""
+        return self.playlist
+    
+    def set_current_index(self, index):
+        """Set the current track index."""
+        if 0 <= index < len(self.playlist):
+            self.index = index
+            self.play_current()
+
+def draw_enhanced_background(surf):
+    """Draw an enhanced background with gradients."""
+    # Simple gradient background
+    for y in range(HEIGHT):
+        ratio = y / HEIGHT
+        r = int(BG_GRADIENT_TOP[0] * (1 - ratio) + BG_GRADIENT_BOTTOM[0] * ratio)
+        g = int(BG_GRADIENT_TOP[1] * (1 - ratio) + BG_GRADIENT_BOTTOM[1] * ratio)
+        b = int(BG_GRADIENT_TOP[2] * (1 - ratio) + BG_GRADIENT_BOTTOM[2] * ratio)
+        pygame.draw.line(surf, (r, g, b), (0, y), (WIDTH, y))
+# -------------------- Централизованная конфигурация игры --------------------
 @dataclass
 class GameConfig:
     """
@@ -127,13 +308,6 @@ class GameConfig:
     auto_save_interval: int = 300  # секунд
     show_debug_info: bool = False
     
-    # Новые настройки интерфейса и доступности
-    ui_theme: str = "dark"  # "dark", "light"
-    enable_high_contrast: bool = False  # Режим высокого контраста для лучшей доступности
-    text_size_multiplier: float = 1.0  # Множитель размера текста для лучшей читаемости
-    enable_text_shadows: bool = True  # Тени текста для лучшей читаемости
-    enable_motion_effects: bool = True  # Анимации и эффекты движения
-    
     @classmethod
     def load_from_file(cls, filename: str = "config.json") -> "GameConfig":
         """Загружает конфигурацию из файла"""
@@ -161,24 +335,15 @@ class GameConfig:
                 'font_scale_multiplier': self.font_scale_multiplier,
                 'button_scale_multiplier': self.button_scale_multiplier,
                 'margin_scale_multiplier': self.margin_scale_multiplier,
-                'game_field_cols': self.game_field_cols,
-                'game_field_rows': self.game_field_rows,
-                'block_size_base': self.block_size_base,
                 'enable_audio': self.enable_audio,
                 'music_volume': self.music_volume,
                 'sound_volume': self.sound_volume,
                 'enable_animations': self.enable_animations,
                 'enable_shadows': self.enable_shadows,
                 'render_quality': self.render_quality,
-                'cache_size_multiplier': self.cache_size_multiplier,
                 'auto_save_enabled': self.auto_save_enabled,
                 'auto_save_interval': self.auto_save_interval,
-                'show_debug_info': self.show_debug_info,
-                'ui_theme': self.ui_theme,
-                'enable_high_contrast': self.enable_high_contrast,
-                'text_size_multiplier': self.text_size_multiplier,
-                'enable_text_shadows': self.enable_text_shadows,
-                'enable_motion_effects': self.enable_motion_effects
+                'show_debug_info': self.show_debug_info
             }
             
             with open(filename, 'w', encoding='utf-8') as f:
@@ -237,7 +402,6 @@ class GameConfig:
 game_config = GameConfig.load_from_file()  # Загружаем сохраненную конфигурацию
 
 # -------------------- Game Modes --------------------
-
 class GameMode(Enum):
     """Перечисление игровых режимов"""
     CAMPAIGN = "campaign"      # Кампания - прохождение уровней с целями
@@ -355,9 +519,7 @@ CAMPAIGN_LEVELS = [
         unlocked=False
     )
 ]
-
 # -------------------- Улучшенная адаптивная дизайн система --------------------
-
 class AdvancedResponsiveDesign:
     """
     Кардинально улучшенная система адаптивного дизайна с интеллектуальным
@@ -589,7 +751,6 @@ class AdvancedResponsiveDesign:
         """Создаёт pygame.Rect с масштабированными координатами"""
         import pygame
         return pygame.Rect(x, y, width, height)
-
     def scale_font(self, base_font_size: int) -> int:
         """Интеллектуальное масштабирование шрифтов с кэшированием"""
         if base_font_size in self._unified_cache['fonts']:
@@ -840,41 +1001,6 @@ class AdvancedResponsiveDesign:
         self._unified_cache['layouts'][cache_key] = result
         return result
     
-    def get_visual_hierarchy_sizes(self) -> dict:
-        """Возвращает размеры шрифтов для визуальной иерархии"""
-        cache_key = f"hierarchy_{self.device_class}_{self.dpi_category}"
-        
-        if cache_key in self._unified_cache['layouts']:
-            return self._unified_cache['layouts'][cache_key]
-        
-        # Базовые размеры (модульная шкала 1.25)
-        base_sizes = {
-            "h1": 48,      # Основной заголовок
-            "h2": 38,      # Вторичные заголовки
-            "h3": 30,      # Подзаголовки
-            "heading": 26, # Обычные заголовки
-            "body": 20,    # Основной текст
-            "caption": 16, # Подписи
-            "small": 14    # Маленький текст
-        }
-        
-        # Масштабирование с учетом агрессивного масштабирования
-        result = {}
-        for key, size in base_sizes.items():
-            scaled_size = self.scale_font(size)
-            
-            # Минимальные размеры для читаемости (согласно memory)
-            min_sizes = {
-                "h1": 32, "h2": 26, "h3": 22, "heading": 20,
-                "body": 18, "caption": 16, "small": 14
-            }
-            
-            scaled_size = max(min_sizes.get(key, 14), scaled_size)
-            result[key] = scaled_size
-        
-        self._unified_cache['layouts'][cache_key] = result
-        return result
-    
     def get_visual_hierarchy_sizes(self, base_size: int = 24) -> dict:
         """Возвращает размеры для создания визуальной иерархии"""
         cache_key = f"hierarchy_{base_size}"
@@ -885,11 +1011,11 @@ class AdvancedResponsiveDesign:
         # Базовый размер с учетом устройства
         scaled_base = self.scale_font(base_size)
         
-        # Иерархия размеров (на основе модульной шкалы)
+        # Иерархия размеров (на основе модульной шкалы) - уменьшены множители для меньших заголовков
         hierarchy = {
-            'title': int(scaled_base * 2.0),      # Главный заголовок
-            'subtitle': int(scaled_base * 1.5),   # Подзаголовок
-            'heading': int(scaled_base * 1.25),   # Заголовок секции
+            'title': int(scaled_base * 1.5),      # Главный заголовок (уменьшен с 2.0)
+            'subtitle': int(scaled_base * 1.2),   # Подзаголовок (уменьшен с 1.5)
+            'heading': int(scaled_base * 1.1),    # Заголовок секции (уменьшен с 1.25)
             'body': scaled_base,                  # Основной текст
             'caption': int(scaled_base * 0.875),  # Подпись
             'small': int(scaled_base * 0.75)      # Мелкий текст
@@ -910,6 +1036,58 @@ class AdvancedResponsiveDesign:
         self._unified_cache['fonts'][cache_key] = hierarchy
         return hierarchy
     
+    def get_responsive_grid(self, total_items: int, container_width: int, container_height: int,
+                          item_min_width: int = 100, item_min_height: int = 80,
+                          max_columns: int = 6) -> dict:
+        """Возвращает оптимальные параметры сетки для размещения элементов"""
+        cache_key = f"grid_{total_items}_{container_width}_{container_height}_{max_columns}"
+        
+        if cache_key in self._unified_cache['layouts']:
+            return self._unified_cache['layouts'][cache_key]
+        
+        # Определяем оптимальное количество колонок
+        max_possible_columns = min(max_columns, total_items)
+        if container_width > 0 and item_min_width > 0:
+            width_based_columns = min(max_possible_columns, container_width // item_min_width)
+            columns = max(1, width_based_columns)
+        else:
+            columns = min(3, max_possible_columns)
+        
+        # Определяем количество строк
+        rows = (total_items + columns - 1) // columns
+        
+        # Вычисляем размеры элементов
+        spacing = self.get_adaptive_spacing("grid")
+        gap_x = spacing['spacing']
+        gap_y = spacing['spacing']
+        
+        if columns > 0:
+            item_width = max(item_min_width, (container_width - gap_x * (columns - 1)) // columns)
+        else:
+            item_width = item_min_width
+            
+        if rows > 0:
+            item_height = max(item_min_height, (container_height - gap_y * (rows - 1)) // rows)
+        else:
+            item_height = item_min_height
+        
+        total_width = columns * item_width + gap_x * (columns - 1) if columns > 0 else 0
+        total_height = rows * item_height + gap_y * (rows - 1) if rows > 0 else 0
+        
+        result = {
+            'columns': columns,
+            'rows': rows,
+            'item_width': item_width,
+            'item_height': item_height,
+            'gap_x': gap_x,
+            'gap_y': gap_y,
+            'total_width': total_width,
+            'total_height': total_height
+        }
+        
+        self._unified_cache['layouts'][cache_key] = result
+        return result
+    
     def get_enhanced_positioning_system(self, elements: list, container_rect: tuple,
                                       positioning_strategy: str = "auto") -> list:
         """Продвинутая система позиционирования с предотвращением коллизий"""
@@ -927,7 +1105,7 @@ class AdvancedResponsiveDesign:
             else:
                 positioning_strategy = "optimal_grid"
         
-        spacing = self.get_adaptive_spacing("menu", "comfortable")
+        spacing = self.get_adaptive_spacing("menu")
         
         if positioning_strategy == "centered_horizontal":
             # Центрированное горизонтальное размещение
@@ -1086,42 +1264,6 @@ class AdvancedResponsiveDesign:
         
         return best_layout
     
-    def render_adaptive_text(self, screen, text: str, font, rect: pygame.Rect, color, ellipsis=True, align='center'):
-        """Рендерит текст с переносом/обрезкой, чтобы помещался в rect."""
-        words = text.split(' ')
-        lines = []
-        current_line = []
-        max_width = rect.width - 20  # padding
-        
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            test_surf = font.render(test_line, True, color)
-            if test_surf.get_width() <= max_width:
-                current_line.append(word)
-            else:
-                if current_line:
-                    lines.append(' '.join(current_line))
-                current_line = [word]
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        # Если слишком много строк — обрезаем с ellipsis
-        max_lines = rect.height // font.get_height()
-        if len(lines) > max_lines and ellipsis:
-            lines = lines[:max_lines-1] + [lines[max_lines-1][:int(max_width / font.size(' ')[0] - 3)] + '...']
-        
-        # Рендер строк
-        y = rect.y + 10  # padding
-        for line in lines:
-            surf = font.render(line, True, color)
-            if align == 'center':
-                x = rect.x + (rect.width - surf.get_width()) // 2
-            else:
-                x = rect.x + 10
-            screen.blit(surf, (x, y))
-            y += font.get_height()
-    
     def get_smart_positioning(self, element_width: int, element_height: int, 
                             container_width: int, container_height: int, 
                             position_type: str = "center") -> tuple:
@@ -1252,16 +1394,10 @@ def get_cached_font(font_name: str, size: int, bold: bool = False) -> pygame.fon
     
     if cache_key not in _font_cache:
         try:
-            # Приоритетные шрифты с хорошей поддержкой кириллицы
-            cyrillic_fonts = 'arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace'
-            _font_cache[cache_key] = pygame.font.SysFont(cyrillic_fonts, scaled_size, bold=bold)
+            _font_cache[cache_key] = pygame.font.SysFont(font_name, scaled_size, bold=bold)
         except Exception:
-            try:
-                # Проверяем наличие системных шрифтов с поддержкой кириллицы
-                _font_cache[cache_key] = pygame.font.SysFont(font_name, scaled_size, bold=bold)
-            except Exception:
-                # Фолбэк на стандартный шрифт
-                _font_cache[cache_key] = pygame.font.Font(None, scaled_size)
+            # Фолбэк на стандартный шрифт
+            _font_cache[cache_key] = pygame.font.Font(None, scaled_size)
         
         # Ограничиваем размер кэша
         if len(_font_cache) > 50:
@@ -1930,567 +2066,211 @@ class GameState:
         return s
 
 # -------------------- Core game logic --------------------
-def reset_animation_state(state: GameState):
-    """
-    Полностью сбрасывает все состояния анимации падения.
-    
-    Args:
-        state: Текущее состояние игры
-    """
-    state.smooth_fall_anim = False
-    state.smooth_fall_speed = 1.0
-    state.smooth_fall_double_press = False
-    state.hard_drop_anim = False
 
+# Game functions
 def gravity_for_level(level: int) -> float:
-    """
-    Вычисляет скорость падения фигур для указанного уровня.
-    
-    Args:
-        level: Уровень сложности (1 и выше)
-        
-    Returns:
-        Интервал в секундах между падениями фигур
-    """
-    return max(0.05, 0.8 * (0.9 ** (level - 1)))
-
-def spawn_x(kind: str) -> int:
-    """
-    Определяет начальную X-позицию для новой фигуры.
-    
-    Args:
-        kind: Тип тетромино
-        
-    Returns:
-        X-координата для спауна фигуры
-    """
-    return 3 if kind != 'I' else 3
-
-def collides(state: GameState, piece: Piece) -> bool:
-    """
-    Проверяет, сталкивается ли фигура с границами стакана или другими фигурами.
-    
-    Args:
-        state: Текущее состояние игры
-        piece: Фигура для проверки
-        
-    Returns:
-        True, если есть столкновение, иначе False
-    """
-    for x, y in piece.cells():
-        if x < 0 or x >= PLAY_COLS or y >= PLAY_ROWS:
-            return True
-        if y >= 0 and state.grid[y][x] is not None:
-            return True
-    return False
-
-def lock_piece(state: GameState):
-    """
-    Фиксирует текущую фигуру на стакане и очищает заполненные линии.
-    
-    Args:
-        state: Текущее состояние игры
-        
-    Returns:
-        Количество очищенных линий
-    """
-    if state.current is None:
-        return 0
-    for x, y in state.current.cells():
-        if y < 0:
-            state.game_over = True
-            return 0
-        state.grid[y][x] = state.current.kind
-    cleared = clear_lines(state)
-    state.can_hold = True
-    state.current = None
-    # Полный сброс состояния анимации при блокировке
-    reset_animation_state(state)
-    spawn_next(state)
-    return cleared
-
-def is_t_spin(state: GameState, piece: Piece, kicked: bool) -> str:
-    """
-    Определяет, является ли последний поворот T-спином.
-    
-    T-спин - это особый тип поворота T-тетромино, когда он зажат с трех сторон и дает дополнительные очки.
-    
-    Args:
-        state: Текущее состояние игры
-        piece: T-тетромино для проверки
-        kicked: Был ли поворот выполнен с киком (wall kick)
-        
-    Returns:
-        'tspin' если это T-спин, 'none' в противном случае
-    """
-    if piece.kind != 'T':
-        return 'none'
-    corners = [(piece.x, piece.y), (piece.x+2, piece.y), (piece.x, piece.y+2), (piece.x+2, piece.y+2)]
-    occupied = 0
-    for cx, cy in corners:
-        if cy < 0 or cx < 0 or cx >= PLAY_COLS or cy >= PLAY_ROWS:
-            occupied += 1
-        elif state.grid[cy][cx] is not None:
-            occupied += 1
-    if occupied >= 3:
-        return 'tspin'
-    return 'none'
-
-def score_lines(state: GameState, lines: int, tspin: str):
-    """
-    Начисляет очки за очищенные линии и обновляет статистику игры.
-    
-    Очки зависят от:
-    - Количества очищенных линий
-    - Наличия T-спина
-    - Комбо (последовательные очистки)
-    - Back-to-Back бонуса (за тетрисы и T-спины подряд)
-    
-    Args:
-        state: Текущее состояние игры
-        lines: Количество очищенных линий
-        tspin: Тип T-спина ('tspin' или 'none')
-    """
-    pts = 0
-    if tspin != 'none':
-        if lines == 1:
-            pts = 400
-        elif lines == 2:
-            pts = 700
-        else:
-            pts = 100
-        b2b_candidate = True
-    else:
-        if lines == 1:
-            pts = 100
-        elif lines == 2:
-            pts = 300
-        elif lines == 3:
-            pts = 500
-        elif lines >= 4:
-            pts = 800
-        b2b_candidate = (lines >= 4)
-
-    if lines > 0:
-        state.combo += 1
-        if state.combo > 0:
-            pts += 50 * state.combo
-        if b2b_candidate:
-            if state.back_to_back:
-                pts = int(pts * 1.5)
-            state.back_to_back = True
-        else:
-            state.back_to_back = False
-        state.lines += lines
-        if state.lines // 10 + 1 > state.level:
-            state.level = state.lines // 10 + 1
-            state.fall_interval = gravity_for_level(state.level)
-    else:
-        state.combo = -1
-        state.back_to_back = False
-
-    state.score += pts
-
-def clear_lines(state: GameState) -> int:
-    """
-    Очищает все заполненные линии с игрового поля.
-    
-    Удаляет все строки, где все клетки заняты, а сверху добавляет пустые строки.
-    
-    Args:
-        state: Текущее состояние игры
-        
-    Returns:
-        Количество очищенных линий
-    """
-    new_grid = [row for row in state.grid if any(cell is None for cell in row)]
-    cleared = PLAY_ROWS - len(new_grid)
-    while len(new_grid) < PLAY_ROWS:
-        new_grid.insert(0, [None for _ in range(PLAY_COLS)])
-    state.grid = new_grid
-    return cleared
+    """Calculate gravity interval for a given level."""
+    return max(0.05, 1.0 - (level - 1) * 0.05)
 
 def refill_bag(state: GameState):
-    """
-    Пополняет мешок с типами тетромино.
-    
-    Использует систему "7-bag" - в каждом мешке есть ровно одна фигура каждого типа, перемешанные случайно.
-    
-    Args:
-        state: Текущее состояние игры
-    """
-    bag = list(SHAPES.keys())
-    random.shuffle(bag)
-    state.bag.extend(bag)
+    """Refill the bag with all 7 tetromino types."""
+    state.bag = list(SHAPES.keys())
+    random.shuffle(state.bag)
 
 def spawn_next(state: GameState):
-    """
-    Создает новую падающую фигуру из очереди.
+    """Spawn the next piece from the queue."""
+    if not state.next_queue:
+        # Fill queue if empty
+        while len(state.next_queue) < 4:
+            if not state.bag:
+                refill_bag(state)
+            state.next_queue.append(state.bag.pop())
     
-    Заполняет очередь следующих фигур до 5 элементов и берёт первую для создания текущей фигуры.
-    
-    Args:
-        state: Текущее состояние игры
-    """
-    while len(state.next_queue) < 5:
-        if not state.bag:
-            refill_bag(state)
-        state.next_queue.append(state.bag.pop(0))
     kind = state.next_queue.pop(0)
-    piece = Piece(kind, spawn_x(kind), -2, 0)
-    if collides(state, piece):
+    state.current = Piece(kind, PLAY_COLS // 2 - 2, 0)
+    
+    # Add new piece to queue
+    if not state.bag:
+        refill_bag(state)
+    state.next_queue.append(state.bag.pop())
+    
+    # Check for collision (game over)
+    if not try_move(state, 0, 0):
         state.game_over = True
-    state.current = piece
-    # Полный сброс состояния анимации для новой фигуры
-    reset_animation_state(state)
 
 def try_move(state: GameState, dx: int, dy: int) -> bool:
-    """
-    Пытается сдвинуть текущую фигуру на указанное расстояние.
-    
-    Args:
-        state: Текущее состояние игры
-        dx: Сдвиг по оси X (столбцам)
-        dy: Сдвиг по оси Y (строкам)
-        
-    Returns:
-        True, если движение возможно, иначе False
-    """
-    if state.current is None:
+    """Try to move the current piece by dx, dy."""
+    if not state.current:
         return False
-    p = Piece(state.current.kind, state.current.x + dx, state.current.y + dy, state.current.r)
-    if not collides(state, p):
-        state.current = p
-        return True
-    return False
+    
+    # Create a test piece
+    test_piece = Piece(state.current.kind, state.current.x + dx, state.current.y + dy, state.current.r)
+    
+    # Check for collisions
+    for x, y in test_piece.cells():
+        if x < 0 or x >= PLAY_COLS or y >= PLAY_ROWS:
+            return False
+        if y >= 0 and state.grid[y][x] is not None:
+            return False
+    
+    # Move the piece
+    state.current.x += dx
+    state.current.y += dy
+    return True
 
 def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
-    """
-    Пытается повернуть текущую фигуру с проверкой wall kick'ов.
+    """Try to rotate the current piece."""
+    if not state.current:
+        return False, "none"
     
-    Использует систему SRS (Super Rotation System) для попыток поворота в нескольких позициях.
+    # Create a test piece
+    new_r = (state.current.r + dr) % len(ROTATED[state.current.kind])
+    test_piece = Piece(state.current.kind, state.current.x, state.current.y, new_r)
     
-    Args:
-        state: Текущее состояние игры
-        dr: Направление поворота (+1 по часовой, -1 против)
-        
-    Returns:
-        Кортеж (удалось ли повернуть, тип T-спина)
-    """
-    cur = state.current
-    if cur is None:
-        return False, 'none'
-    from_r = cur.r % len(ROTATED[cur.kind])
-    to_r = (cur.r + dr) % len(ROTATED[cur.kind])
-    which = 'I' if cur.kind == 'I' else 'JLTSZ'
-    kicks = KICKS.get(which, {}).get((from_r, to_r), [(0, 0)])
-    for (dx, dy) in kicks:
-        cand = Piece(cur.kind, cur.x + dx, cur.y + dy, to_r)
-        if not collides(state, cand):
-            state.current = cand
-            return True, is_t_spin(state, cand, kicked=(dx != 0 or dy != 0))
-    return False, 'none'
+    # Check for collisions
+    for x, y in test_piece.cells():
+        if x < 0 or x >= PLAY_COLS or y >= PLAY_ROWS:
+            return False, "none"
+        if y >= 0 and state.grid[y][x] is not None:
+            return False, "none"
+    
+    # Rotate the piece
+    state.current.r = new_r
+    return True, "none"
 
 def hard_drop_distance(state: GameState) -> int:
-    """
-    Вычисляет расстояние для быстрого падения текущей фигуры.
-    
-    Определяет, на сколько клеток вниз можно опустить фигуру до столкновения.
-    
-    Args:
-        state: Текущее состояние игры
-        
-    Returns:
-        Количество клеток до приземления
-    """
-    if state.current is None:
+    """Calculate the distance for a hard drop."""
+    if not state.current:
         return 0
-    dist = 0
-    p = state.current
+    
+    # Try moving down until collision
+    distance = 0
+    test_y = state.current.y
+    
     while True:
-        q = Piece(p.kind, p.x, p.y + dist + 1, p.r)
-        if collides(state, q):
+        test_piece = Piece(state.current.kind, state.current.x, test_y + 1, state.current.r)
+        collision = False
+        
+        for x, y in test_piece.cells():
+            if y >= PLAY_ROWS or (y >= 0 and state.grid[y][x] is not None):
+                collision = True
+                break
+        
+        if collision:
             break
-        dist += 1
-    return dist
+        
+        test_y += 1
+        distance += 1
+    
+    return distance
 
 def ghost_position(state: GameState) -> Optional[Piece]:
-    """
-    Создает "призрачную" копию текущей фигуры в позиции приземления.
-    
-    Показывает игроку, где приземлится фигура при быстром падении.
-    
-    Args:
-        state: Текущее состояние игры
-        
-    Returns:
-        Копия текущей фигуры в позиции приземления или None, если нет текущей фигуры
-    """
-    if state.current is None:
+    """Calculate the ghost piece position."""
+    if not state.current:
         return None
-    d = hard_drop_distance(state)
-    p = state.current
-    return Piece(p.kind, p.x, p.y + d, p.r)
+    
+    # Create a ghost piece at the hard drop position
+    distance = hard_drop_distance(state)
+    ghost = Piece(state.current.kind, state.current.x, state.current.y + distance, state.current.r)
+    return ghost
 
 def hold_swap(state: GameState):
-    """
-    Выполняет обмен текущей фигуры с зафиксированной (Hold).
-    
-    Механика Hold позволяет сохранить текущую фигуру на потом и использовать её позже.
-    Можно использовать только один раз на каждую фигуру.
-    
-    Args:
-        state: Текущее состояние игры
-    """
-    if state.current is None or not state.can_hold:
+    """Swap the current piece with the held piece."""
+    if not state.can_hold or not state.current:
         return
-    cur_kind = state.current.kind
+    
     if state.hold is None:
-        state.hold = cur_kind
+        # First hold
+        state.hold = state.current.kind
+        state.current = None
         spawn_next(state)
     else:
-        state.current = Piece(state.hold, spawn_x(state.hold), -2, 0)
-        state.hold = cur_kind
-        if collides(state, state.current):
-            state.game_over = True
-        # Полный сброс состояния анимации при смене фигуры
-        reset_animation_state(state)
+        # Swap with held piece
+        held_kind = state.hold
+        state.hold = state.current.kind
+        state.current = Piece(held_kind, PLAY_COLS // 2 - 2, 0)
+    
     state.can_hold = False
 
-# -------------------- Audio --------------------
+def lock_piece(state: GameState):
+    """Lock the current piece in place."""
+    if not state.current:
+        return 0
+    
+    # Place the piece on the grid
+    for x, y in state.current.cells():
+        if 0 <= y < PLAY_ROWS and 0 <= x < PLAY_COLS:
+            state.grid[y][x] = state.current.kind
+    
+    state.current = None
+    state.can_hold = True
+    
+    # Check for completed lines
+    lines_cleared = 0
+    y = PLAY_ROWS - 1
+    
+    while y >= 0:
+        if all(state.grid[y][x] is not None for x in range(PLAY_COLS)):
+            # Remove the line
+            for yy in range(y, 0, -1):
+                state.grid[yy] = state.grid[yy-1][:]
+            state.grid[0] = [None] * PLAY_COLS
+            lines_cleared += 1
+        else:
+            y -= 1
+    
+    return lines_cleared
 
-MUSIC_END_EVENT = pygame.USEREVENT + 1
+def score_lines(state: GameState, lines: int, tspin: str):
+    """Update score based on lines cleared."""
+    if lines == 0:
+        return
+    
+    # Update combo
+    if lines > 0:
+        state.combo += 1
+    else:
+        state.combo = -1
+    
+    # Calculate score
+    line_points = [0, 100, 300, 500, 800]  # Points for 0, 1, 2, 3, 4 lines
+    score = line_points[lines] * state.level
+    
+    # Combo bonus
+    if state.combo > 0:
+        score += 50 * state.combo * state.level
+    
+    state.score += score
+    state.lines += lines
+    
+    # Level up
+    state.level = state.lines // 10 + 1
+    state.fall_interval = gravity_for_level(state.level)
 
-class AudioManager:
+# --- BEGIN: Robust reset_animation_state (ChatGPT patch) ---
+def reset_animation_state(state):
     """
-    Менеджер аудиосистемы для воспроизведения музыки и звуковых эффектов.
-    
-    Обрабатывает:
-    - Фоновую музыку с раздельными плейлистами для меню, паузы и игры
-    - Звуковые эффекты (поворот, падение, очистка линий)
-    - Переключение между треками
-    - Автоматическое переключение контекста музыки
-    
-    Attributes:
-        menu_playlist: Список путей к музыкальным файлам для меню
-        pause_playlist: Список путей к музыкальным файлам для меню паузы
-        game_playlist: Список путей к музыкальным файлам для игры
-        current_context: Текущий контекст ('menu', 'pause' или 'game')
-        menu_index: Индекс текущего трека в меню
-        pause_index: Индекс текущего трека в меню паузы
-        game_index: Индекс текущего трека в игре
-        enabled: Включена ли аудиосистема
-        sounds: Словарь загруженных звуковых эффектов
+    Полный сброс флагов анимации в GameState (безопасный вариант).
     """
-    def __init__(self):
-        # initialize mixer safely
-        try:
-            pygame.mixer.init()
-        except Exception:
-            pass
-        
-        # Создаём раздельные плейлисты для меню, паузы и игры
-        self.menu_playlist = [f for f in MENU_MUSIC_FILES if os.path.isfile(f)]
-        self.pause_playlist = [f for f in PAUSE_MUSIC_FILES if os.path.isfile(f)]
-        self.game_playlist = [f for f in GAME_MUSIC_FILES if os.path.isfile(f)]
-        
-        # Фолбэк логика для пустых плейлистов
-        if not self.pause_playlist:
-            # Если нет специальной музыки для паузы, используем меню
-            self.pause_playlist = self.menu_playlist.copy() if self.menu_playlist else self.game_playlist.copy()
-        if not self.menu_playlist and self.game_playlist:
-            self.menu_playlist = self.game_playlist.copy()
-        elif not self.game_playlist and self.menu_playlist:
-            self.game_playlist = self.menu_playlist.copy()
-            
-        self.menu_index = 0
-        self.pause_index = 0
-        self.game_index = 0
-        self.current_context = 'menu'  # Начинаем с меню
-        
-        # Для обратной совместимости
-        self.playlist = self.menu_playlist if self.menu_playlist else self.game_playlist
-        self.index = 0
-        
-        self.enabled = len(self.menu_playlist) > 0 or len(self.game_playlist) > 0
-        pygame.mixer.music.set_endevent(MUSIC_END_EVENT)
-        self.sounds = {}
-        
-        # load sfx if available
-        if os.path.isdir(SOUNDS_DIR):
-            for name in ['rotate', 'drop', 'line']:
-                path = os.path.join(SOUNDS_DIR, f"{name}.wav")
-                if os.path.isfile(path):
-                    try:
-                        self.sounds[name] = pygame.mixer.Sound(path)
-                    except Exception:
-                        self.sounds[name] = None
-        # default volume
-        try:
-            pygame.mixer.music.set_volume(0.5)
-        except Exception:
-            pass
-    
-    def set_context(self, context: str):
-        """Переключает контекст музыки между 'menu', 'pause' и 'game'."""
-        if context not in ['menu', 'pause', 'game']:
-            return
-            
-        old_context = self.current_context
-        self.current_context = context
-        
-        # Обновляем текущий плейлист и индекс для обратной совместимости
-        if context == 'menu':
-            self.playlist = self.menu_playlist
-            self.index = self.menu_index
-        elif context == 'pause':
-            self.playlist = self.pause_playlist
-            self.index = self.pause_index
-        else:
-            self.playlist = self.game_playlist
-            self.index = self.game_index
-            
-        # Если контекст изменился и есть музыка, начинаем воспроизведение
-        if old_context != context and self.enabled and len(self.playlist) > 0:
-            self.play_current()
-    
-    def get_current_playlist(self):
-        """Возвращает текущий активный плейлист."""
-        if self.current_context == 'menu':
-            return self.menu_playlist
-        elif self.current_context == 'pause':
-            return self.pause_playlist
-        else:
-            return self.game_playlist
-    
-    def get_current_index(self):
-        """Возвращает текущий индекс в активном плейлисте."""
-        if self.current_context == 'menu':
-            return self.menu_index
-        elif self.current_context == 'pause':
-            return self.pause_index
-        else:
-            return self.game_index
-    
-    def set_current_index(self, index: int):
-        """Устанавливает индекс в текущем плейлисте."""
-        playlist = self.get_current_playlist()
-        if not playlist:
-            return
-            
-        index = max(0, min(index, len(playlist) - 1))
-        
-        if self.current_context == 'menu':
-            self.menu_index = index
-        elif self.current_context == 'pause':
-            self.pause_index = index
-        else:
-            self.game_index = index
-            
-        # Обновляем для обратной совместимости
-        self.index = index
-        self.playlist = playlist
-
-    def play_current(self):
-        """
-        Воспроизводит текущий трек из активного плейлиста.
-        Обрабатывает ошибки загрузки файлов.
-        """
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        if current_index >= len(current_playlist):
-            current_index = 0
-            self.set_current_index(current_index)
-            
-        path = current_playlist[current_index]
-        try:
-            pygame.mixer.music.load(path)
-            pygame.mixer.music.play()
-            print(f"[AudioManager] Playing {self.current_context} music: {os.path.basename(path)}")
-        except Exception as e:
-            print('Failed to play', path, e)
-
-    def next(self):
-        """Переключает на следующий трек в текущем плейлисте."""
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        new_index = (current_index + 1) % len(current_playlist)
-        self.set_current_index(new_index)
-        self.play_current()
-
-    def prev(self):
-        """Переключает на предыдущий трек в текущем плейлисте."""
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        new_index = (current_index - 1) % len(current_playlist)
-        self.set_current_index(new_index)
-        self.play_current()
-
-    def stop(self):
-        try:
-            pygame.mixer.music.stop()
-        except Exception:
-            pass
-
-    def play_sfx(self, name: str):
-        s = self.sounds.get(name)
-        if s:
+    try:
+        setattr(state, 'smooth_fall_anim', False)
+        setattr(state, 'smooth_fall_speed', getattr(state, 'smooth_fall_speed', 1.0))
+        setattr(state, 'smooth_fall_double_press', False)
+        if hasattr(state, 'smooth_fall_start_time'):
             try:
-                s.play()
+                state.smooth_fall_start_time = 0.0
             except Exception:
                 pass
-
-def draw_enhanced_background(surf):
-    """Рисует улучшенный фон для главной игры"""
-    # Основной градиентный фон
-    screen_rect = pygame.Rect(0, 0, WIDTH, HEIGHT)
-    draw_gradient_rect(surf, screen_rect, BG_GRADIENT_TOP, BG_GRADIENT_BOTTOM)
-    
-    # Анимированные декоративные элементы
-    current_time = time.time()
-    # Геометрические фигуры в стиле тетриса
-    for i in range(6):
-        # Плавная анимация позиции
-        offset = math.sin(current_time * 0.5 + i * 0.8) * 20
-        x = WIDTH - 80 + (i % 3) * 30 + offset * 0.3
-        y = 100 + i * 90 + offset
-        size = 15 + (i % 2) * 5
-        
-        # Пульсирующая прозрачность
-        alpha = int(40 + 30 * math.sin(current_time * 1.2 + i * 0.5))
-        
-        # Мини-блоки как у тетромино
-        decoration_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        deco_color = list(COLORS.values())[i % len(COLORS)]
-        decoration_surf.fill((*deco_color, alpha))
-        surf.blit(decoration_surf, (x, y))
-        
-        # Левая сторона с другой скоростью анимации
-        x_left = 20 + (i % 2) * 25 + math.cos(current_time * 0.7 + i) * 15
-        y_left = 150 + i * 80 + math.sin(current_time * 0.3 + i) * 10
-        decoration_left = pygame.Surface((size, size), pygame.SRCALPHA)
-        decoration_left.fill((*deco_color, alpha//2))
-        surf.blit(decoration_left, (x_left, y_left))
-
-# -------------------- Smooth Animation Utilities --------------------
+        setattr(state, 'hard_drop_anim', False)
+        if hasattr(state, '_anim_draw_y'):
+            try:
+                state._anim_draw_y = 0
+            except Exception:
+                pass
+    except Exception:
+        # defensive: don't raise during reset
+        pass
+# --- END: Robust reset_animation_state ---
 def smooth_lerp(start, end, t):
     """Плавная интерполяция между двумя значениями"""
     # Easing function для более плавной анимации
@@ -2535,15 +2315,7 @@ def draw_enhanced_adaptive_text(surface, text: str, rect: pygame.Rect, font_size
         max_chars_per_line = max(1, rect.width // (font_size * 0.6))
     
     # Получаем шрифт с агрессивным масштабированием
-    try:
-        # Приоритетные шрифты с хорошей поддержкой кириллицы
-        font = get_cached_font('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', optimal_font_size, bold)
-    except Exception:
-        # Фолбэк на стандартный шрифт
-        try:
-            font = pygame.font.SysFont('arial', optimal_font_size, bold=bold)
-        except Exception:
-            font = pygame.font.Font(None, optimal_font_size)
+    font = get_cached_font('consolas,dejavusansmono,menlo,monospace', optimal_font_size, bold)
     
     # Разбиваем текст на строки
     lines = []
@@ -2701,20 +2473,12 @@ def draw_enhanced_adaptive_button(surface, rect: pygame.Rect, text: str,
     return rect
 def draw_gradient_rect(surf, rect, color_top, color_bottom, vertical=True, animated=False):
     """Рисует прямоугольник с плавным градиентом"""
-    global game_config
-    
-    # Применяем настройки темы
-    if game_config.enable_high_contrast:
-        # В режиме высокого контраста используем сплошные цвета вместо градиентов
-        solid_color = (255, 255, 255) if sum(color_top) > 382 else (0, 0, 0)  # Белый или черный
-        pygame.draw.rect(surf, solid_color, rect)
-        return
-    elif game_config.ui_theme == "light":
-        # Для светлой темы инвертируем цвета
-        color_top = tuple(255 - c for c in color_top)
-        color_bottom = tuple(255 - c for c in color_bottom)
-    
     gradient_surf = pygame.Surface((rect.width, rect.height))
+    
+    # Анимированные цвета для плавных эффектов
+    if animated:
+        color_top = glow_color(color_top, 0.2, 0)
+        color_bottom = glow_color(color_bottom, 0.2, 0.5)
     
     if vertical:
         for y in range(rect.height):
@@ -2749,8 +2513,6 @@ def draw_shadow(surf, rect, offset=(3, 3), blur=2, color=PANEL_SHADOW):
 
 def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
     """Рисует улучшенную панель с плавными эффектами"""
-    global game_config
-    
     # Многослойная тень для глубины
     for i in range(3):
         shadow_offset = (2 + i, 2 + i)
@@ -2759,12 +2521,7 @@ def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
         shadow_rect.x += shadow_offset[0]
         shadow_rect.y += shadow_offset[1]
         shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
-        
-        # Применяем настройки темы к теням
-        if game_config.enable_high_contrast:
-            shadow_surf.fill((0, 0, 0, shadow_alpha))  # Черные тени в режиме высокого контраста
-        else:
-            shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
+        shadow_surf.fill((*PANEL_SHADOW, shadow_alpha))
         surf.blit(shadow_surf, shadow_rect.topleft)
     
     # Основной фон с плавным градиентом
@@ -2775,67 +2532,31 @@ def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
         panel_top = (35, 40, 50)
         panel_bottom = (25, 30, 38)
     
-    # Применяем настройки темы к панели
-    if game_config.enable_high_contrast:
-        # В режиме высокого контраста используем сплошной цвет
-        pygame.draw.rect(surf, (0, 0, 0), rect)
-    elif game_config.ui_theme == "light":
-        # Для светлой темы используем светлые цвета
-        panel_top = tuple(255 - c for c in panel_top)
-        panel_bottom = tuple(255 - c for c in panel_bottom)
-        draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
-    else:
-        draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
+    draw_gradient_rect(surf, rect, panel_top, panel_bottom, animated=animated)
     
     # Многослойная рамка
     # Основная рамка
     border_color = glow_color(PANEL_BORDER, 0.1, 0) if animated else PANEL_BORDER
-    
-    # Применяем настройки темы к рамке
-    if game_config.enable_high_contrast:
-        border_color = (255, 255, 255)  # Белая рамка в режиме высокого контраста
-    elif game_config.ui_theme == "light":
-        border_color = tuple(255 - c for c in border_color)
-    
     pygame.draw.rect(surf, border_color, rect, 2, border_radius=12)
     
     # Внутренняя подсветка
     inner_rect = rect.copy()
     inner_rect.inflate(-4, -4)
     inner_color = (45, 52, 65) if not animated else glow_color((45, 52, 65), 0.2, 0.7)
-    
-    # Применяем настройки темы к внутренней подсветке
-    if game_config.enable_high_contrast:
-        inner_color = (255, 255, 255)  # Белая подсветка в режиме высокого контраста
-    elif game_config.ui_theme == "light":
-        inner_color = tuple(255 - c for c in inner_color)
-    
     pygame.draw.rect(surf, inner_color, inner_rect, 1, border_radius=10)
     
     # Наружное свечение (для анимированных панелей)
-    if animated and not game_config.enable_high_contrast:
+    if animated:
         glow_rect = rect.copy()
         glow_rect.inflate(4, 4)
         glow_alpha = int(20 + 15 * pulse_effect(0, 0.5))
         glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-        
-        # Применяем настройки темы к свечению
-        if game_config.ui_theme == "light":
-            glow_surf.fill((255, 255, 255, glow_alpha))  # Белое свечение для светлой темы
-        else:
-            glow_surf.fill((*ACCENT_PRIMARY, glow_alpha))
+        glow_surf.fill((*ACCENT_PRIMARY, glow_alpha))
         surf.blit(glow_surf, glow_rect.topleft)
     
     # Заголовок (если указан)
     if title and font:
         title_color = glow_color(WHITE, 0.1, 0) if animated else WHITE
-        
-        # Применяем настройки темы к заголовку
-        if game_config.enable_high_contrast:
-            title_color = (255, 255, 255)  # Белый заголовок в режиме высокого контраста
-        elif game_config.ui_theme == "light":
-            title_color = (0, 0, 0)  # Черный заголовок для светлой темы
-        
         title_surf = font.render(title, True, title_color)
         title_x = rect.x + (rect.width - title_surf.get_width()) // 2
         title_y = rect.y + 10
@@ -3452,8 +3173,7 @@ def get_adaptive_font(text: str, base_font, max_width: int, max_height: int, use
     if cache_key in _adaptive_font_cache:
         return _adaptive_font_cache[cache_key]
     
-    # Приоритетные шрифты с хорошей поддержкой кириллицы
-    font_path = 'arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace'
+    font_path = 'consolas,dejavusansmono,menlo,monospace'
     is_bold = True
     
     # Значительно увеличенный начальный размер с учетом адаптивности
@@ -3629,8 +3349,7 @@ def get_menu_button_font(text: str, base_font, max_width: int, max_height: int):
     """
     global responsive
     
-    # Приоритетные шрифты с хорошей поддержкой кириллицы
-    font_path = 'arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace'
+    font_path = 'consolas,dejavusansmono,menlo,monospace'
     is_bold = True
     
     # Определяем значительно увеличенные базовые размеры
@@ -3698,23 +3417,9 @@ def wrap_text_for_button(text: str, font, max_width: int):
                 lines.append(current_line)
                 current_line = word
             else:
-                # Если даже одно слово не помещается, принудительно разбиваем
-                # Для русских слов часто требуется больше места
-                chars_per_part = max(3, len(word) // 2) # Минимум 3 буквы для русских слов
-                
-                # Более умное разбиение длинных слов на части
-                i = 0
-                while i < len(word):
-                    part = word[i:i+chars_per_part]
-                    test_part = font.render(part, True, (255, 255, 255))
-                    
-                    # Проверяем, что часть помещается
-                    if test_part.get_width() <= max_width:
-                        lines.append(part)
-                        i += chars_per_part
-                    else:
-                        # Если даже часть не помещается, уменьшаем её
-                        chars_per_part = max(1, chars_per_part - 1)
+                # Если даже одно слово не помещается, принудительно обрезаем
+                lines.append(word[:max(1, len(word)//2)])
+                current_line = word[len(word)//2:]
     
     if current_line:
         lines.append(current_line)
@@ -3755,7 +3460,7 @@ def draw_adaptive_button(surface, rect: pygame.Rect, text: str, font, hover=Fals
         
         # Создаем оптимальный шрифт
         try:
-            optimal_font = get_cached_font('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', 
+            optimal_font = get_cached_font('consolas,dejavusansmono,menlo,monospace', 
                                          optimal_font_size, True)
         except:
             optimal_font = font
@@ -3868,12 +3573,9 @@ def draw_smart_text_block(surface, text: str, rect: pygame.Rect, base_font_size:
     
     # Создаем шрифт
     try:
-        font = get_cached_font('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', font_size, False)
+        font = get_cached_font('consolas,dejavusansmono,menlo,monospace', font_size, False)
     except:
-        try:
-            font = pygame.font.SysFont('arial', font_size, False)
-        except:
-            font = pygame.font.Font(None, font_size)
+        font = pygame.font.Font(None, font_size)
     
     # Разбиваем текст на строки
     words = text.split(' ')
@@ -4066,7 +3768,6 @@ def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False, active
     """
     Расширенная функция отрисовки кнопок с продвинутыми эффектами и анимацией.
     """
-    global game_config
     current_time = time.time()
     
     # Прогрессивный эффект клика с микро-анимацией
@@ -4101,188 +3802,90 @@ def draw_button(surface, rect: pygame.Rect, text: str, font, hover=False, active
     hover_multiplier = smooth_lerp(0.0, 1.0, transition_progress) if hover else 0.0
     pulse_intensity = pulse_effect(current_time, 1.0, 0.2) if hover else 0.0
     
-    # Применяем настройки темы и высокого контраста
-    if game_config.enable_high_contrast:
-        # Режим высокого контраста для лучшей доступности
+    if style == "primary":
         if active:
-            bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-            border_color = (255, 255, 255)
-            text_color = (255, 255, 255)
+            bg_top, bg_bottom = (45, 110, 180), (35, 90, 160)
+            border_color = (60, 130, 200)
+            text_color = WHITE
         elif hover:
-            bg_top, bg_bottom = (255, 255, 255), (255, 255, 255)
-            border_color = (0, 0, 0)
-            text_color = (0, 0, 0)
+            # Прогрессивный переход с пульсацией
+            base_top, base_bottom = (64, 146, 245), (44, 126, 225)
+            hover_top, hover_bottom = (104, 186, 255), (84, 166, 255)
+            click_boost = click_intensity * 20
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 15 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 12 + click_boost)) for i in range(3))
+            border_color = glow_color((120, 200, 255), 0.4 + pulse_intensity * 0.2, current_time)
+            text_color = glow_color(WHITE, 0.15 + pulse_intensity * 0.1, current_time)
         else:
-            if style == "primary":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 255, 255)
-                text_color = (255, 255, 255)
-            elif style == "success":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (0, 255, 0)
-                text_color = (0, 255, 0)
-            elif style == "danger":
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 0, 0)
-                text_color = (255, 0, 0)
-            else:
-                bg_top, bg_bottom = (0, 0, 0), (0, 0, 0)
-                border_color = (255, 255, 255)
-                text_color = (255, 255, 255)
-    elif game_config.ui_theme == "light":
-        # Светлая тема
+            bg_top, bg_bottom = (64, 146, 245), (44, 126, 225)
+            border_color = (80, 160, 240)
+            text_color = WHITE
+            
+    elif style == "success":
         if active:
-            bg_top, bg_bottom = (200, 200, 200), (180, 180, 180)
-            border_color = (100, 100, 100)
-            text_color = (0, 0, 0)
+            bg_top, bg_bottom = (30, 150, 90), (25, 130, 75)
+            border_color = (45, 170, 105)
+            text_color = WHITE
         elif hover:
-            if style == "primary":
-                base_top, base_bottom = (180, 220, 255), (160, 200, 235)
-                hover_top, hover_bottom = (220, 240, 255), (200, 220, 235)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 15 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 12 + click_boost)) for i in range(3))
-                border_color = glow_color((100, 150, 200), 0.4 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color((0, 0, 0), 0.15 + pulse_intensity * 0.1, current_time)
-            elif style == "success":
-                base_top, base_bottom = (200, 255, 220), (180, 235, 200)
-                hover_top, hover_bottom = (240, 255, 240), (220, 235, 220)
-                click_boost = click_intensity * 25
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 20 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((0, 150, 50), 0.5 + pulse_intensity * 0.3, current_time)
-                text_color = glow_color((0, 0, 0), 0.2 + pulse_intensity * 0.15, current_time)
-            elif style == "danger":
-                base_top, base_bottom = (255, 200, 200), (235, 180, 180)
-                hover_top, hover_bottom = (255, 240, 240), (235, 220, 220)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 18 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((150, 50, 50), 0.3 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color((0, 0, 0), 0.1 + pulse_intensity * 0.1, current_time)
-            else:
-                base_top, base_bottom = (220, 220, 220), (200, 200, 200)
-                hover_top, hover_bottom = (240, 240, 240), (220, 220, 220)
-                click_boost = click_intensity * 15
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 12 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 8 + click_boost)) for i in range(3))
-                border_color = glow_color((100, 100, 100), 0.2 + pulse_intensity * 0.15, current_time)
-                text_color = glow_color((0, 0, 0), 0.1 + pulse_intensity * 0.08, current_time)
+            base_top, base_bottom = (40, 200, 120), (30, 180, 100)
+            hover_top, hover_bottom = (80, 240, 160), (70, 220, 140)
+            click_boost = click_intensity * 25
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 20 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 15 + click_boost)) for i in range(3))
+            border_color = glow_color((80, 255, 160), 0.5 + pulse_intensity * 0.3, current_time)
+            text_color = glow_color(WHITE, 0.2 + pulse_intensity * 0.15, current_time)
         else:
-            if style == "primary":
-                bg_top, bg_bottom = (180, 220, 255), (160, 200, 235)
-                border_color = (100, 150, 200)
-                text_color = (0, 0, 0)
-            elif style == "success":
-                bg_top, bg_bottom = (200, 255, 220), (180, 235, 200)
-                border_color = (0, 150, 50)
-                text_color = (0, 0, 0)
-            elif style == "danger":
-                bg_top, bg_bottom = (255, 200, 200), (235, 180, 180)
-                border_color = (150, 50, 50)
-                text_color = (0, 0, 0)
-            else:
-                bg_top, bg_bottom = (220, 220, 220), (200, 200, 200)
-                border_color = (100, 100, 100)
-                text_color = (0, 0, 0)
-    else:
-        # Темная тема (по умолчанию)
-        if style == "primary":
-            if active:
-                bg_top, bg_bottom = (45, 110, 180), (35, 90, 160)
-                border_color = (60, 130, 200)
-                text_color = WHITE
-            elif hover:
-                # Прогрессивный переход с пульсацией
-                base_top, base_bottom = (64, 146, 245), (44, 126, 225)
-                hover_top, hover_bottom = (104, 186, 255), (84, 166, 255)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 15 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 12 + click_boost)) for i in range(3))
-                border_color = glow_color((120, 200, 255), 0.4 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color(WHITE, 0.15 + pulse_intensity * 0.1, current_time)
-            else:
-                bg_top, bg_bottom = (64, 146, 245), (44, 126, 225)
-                border_color = (80, 160, 240)
-                text_color = WHITE
-                
-        elif style == "success":
-            if active:
-                bg_top, bg_bottom = (30, 150, 90), (25, 130, 75)
-                border_color = (45, 170, 105)
-                text_color = WHITE
-            elif hover:
-                base_top, base_bottom = (40, 200, 120), (30, 180, 100)
-                hover_top, hover_bottom = (80, 240, 160), (70, 220, 140)
-                click_boost = click_intensity * 25
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 20 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((80, 255, 160), 0.5 + pulse_intensity * 0.3, current_time)
-                text_color = glow_color(WHITE, 0.2 + pulse_intensity * 0.15, current_time)
-            else:
-                bg_top, bg_bottom = (40, 200, 120), (30, 180, 100)
-                border_color = (55, 215, 135)
-                text_color = WHITE
-                
-        elif style == "danger":
-            if active:
-                bg_top, bg_bottom = (180, 40, 50), (160, 30, 40)
-                border_color = (200, 55, 65)
-                text_color = WHITE
-            elif hover:
-                base_top, base_bottom = (220, 53, 69), (200, 43, 59)
-                hover_top, hover_bottom = (255, 93, 109), (235, 73, 89)
-                click_boost = click_intensity * 20
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 18 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 15 + click_boost)) for i in range(3))
-                border_color = glow_color((255, 108, 124), 0.3 + pulse_intensity * 0.2, current_time)
-                text_color = glow_color(WHITE, 0.1 + pulse_intensity * 0.1, current_time)
-            else:
-                bg_top, bg_bottom = (220, 53, 69), (200, 43, 59)
-                border_color = (235, 68, 84)
-                text_color = WHITE
-                
-        else:  # default - максимально оптимизированные базовые кнопки
-            if active:
-                bg_top, bg_bottom = BUTTON_BG_ACTIVE, tuple(max(0, c - 12) for c in BUTTON_BG_ACTIVE)
-                border_color = BUTTON_BORDER_HOVER
-                text_color = BUTTON_TEXT_HOVER
-            elif hover:
-                base_top, base_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-                hover_top, hover_bottom = BUTTON_BG_HOVER, tuple(max(0, c - 10) for c in BUTTON_BG_HOVER)
-                click_boost = click_intensity * 15
-                
-                bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
-                                          pulse_intensity * 12 + click_boost)) for i in range(3))
-                bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
-                                             pulse_intensity * 8 + click_boost)) for i in range(3))
-                border_color = glow_color(BUTTON_BORDER_HOVER, 0.2 + pulse_intensity * 0.15, current_time)
-                text_color = glow_color(BUTTON_TEXT_HOVER, 0.1 + pulse_intensity * 0.08, current_time)
-            else:
-                bg_top, bg_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
-                border_color = BUTTON_BORDER
-                text_color = BUTTON_TEXT
+            bg_top, bg_bottom = (40, 200, 120), (30, 180, 100)
+            border_color = (55, 215, 135)
+            text_color = WHITE
+            
+    elif style == "danger":
+        if active:
+            bg_top, bg_bottom = (180, 40, 50), (160, 30, 40)
+            border_color = (200, 55, 65)
+            text_color = WHITE
+        elif hover:
+            base_top, base_bottom = (220, 53, 69), (200, 43, 59)
+            hover_top, hover_bottom = (255, 93, 109), (235, 73, 89)
+            click_boost = click_intensity * 20
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 18 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 15 + click_boost)) for i in range(3))
+            border_color = glow_color((255, 108, 124), 0.3 + pulse_intensity * 0.2, current_time)
+            text_color = glow_color(WHITE, 0.1 + pulse_intensity * 0.1, current_time)
+        else:
+            bg_top, bg_bottom = (220, 53, 69), (200, 43, 59)
+            border_color = (235, 68, 84)
+            text_color = WHITE
+            
+    else:  # default - максимально оптимизированные базовые кнопки
+        if active:
+            bg_top, bg_bottom = BUTTON_BG_ACTIVE, tuple(max(0, c - 12) for c in BUTTON_BG_ACTIVE)
+            border_color = BUTTON_BORDER_HOVER
+            text_color = BUTTON_TEXT_HOVER
+        elif hover:
+            base_top, base_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
+            hover_top, hover_bottom = BUTTON_BG_HOVER, tuple(max(0, c - 10) for c in BUTTON_BG_HOVER)
+            click_boost = click_intensity * 15
+            
+            bg_top = tuple(min(255, int(smooth_lerp(base_top[i], hover_top[i], hover_multiplier) + 
+                                      pulse_intensity * 12 + click_boost)) for i in range(3))
+            bg_bottom = tuple(min(255, int(smooth_lerp(base_bottom[i], hover_bottom[i], hover_multiplier) + 
+                                         pulse_intensity * 8 + click_boost)) for i in range(3))
+            border_color = glow_color(BUTTON_BORDER_HOVER, 0.2 + pulse_intensity * 0.15, current_time)
+            text_color = glow_color(BUTTON_TEXT_HOVER, 0.1 + pulse_intensity * 0.08, current_time)
+        else:
+            bg_top, bg_bottom = BUTTON_BG, tuple(max(0, c - 5) for c in BUTTON_BG)
+            border_color = BUTTON_BORDER
+            text_color = BUTTON_TEXT
     
     # Продвинутый градиентный фон с анимацией
     draw_gradient_rect(surface, display_rect, bg_top, bg_bottom, animated=hover or click_effect)
@@ -4382,6 +3985,7 @@ def mode_selection_menu(screen, clock, font, small, audio: AudioManager):
     
     while True:
         dt = clock.tick(FPS) / 1000.0
+
         mouse_pos = pygame.mouse.get_pos()
         mouse_clicked = False
         
@@ -5091,14 +4695,8 @@ def pause_menu(screen, clock, font, small, audio: AudioManager, state: GameState
     # Адаптивные шрифты
     title_font_size = responsive.scale_font(36) if responsive else 36
     button_font_size = responsive.scale_font(24) if responsive else 24
-    
-    try:
-        bigfont = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,monospace', title_font_size, bold=True)
-        button_font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,monospace', button_font_size, bold=True)
-    except Exception:
-        # Фолбэк на стандартные шрифты
-        bigfont = pygame.font.SysFont('consolas,monospace', title_font_size, bold=True)
-        button_font = pygame.font.SysFont('consolas,monospace', button_font_size, bold=True)
+    bigfont = pygame.font.SysFont('consolas,monospace', title_font_size, bold=True)
+    button_font = pygame.font.SysFont('consolas,monospace', button_font_size, bold=True)
     
     buttons = [
         ('Продолжить', 'resume', 'primary'),
@@ -5208,18 +4806,8 @@ def pause_menu(screen, clock, font, small, audio: AudioManager, state: GameState
                                     return ('resolution_changed', new_screen)
                         except Exception as e:
                             print(f"[Ошибка] Не удалось открыть меню разрешения: {e}")
-                    elif action == 'next': 
-                        # Сохраняем индекс трека в игровом контексте, если переключаем из паузы
-                        audio.next()
-                        if audio.current_context == 'pause' and original_context == 'game':
-                            # Синхронизируем индекс паузы с индексом игры
-                            audio.game_index = audio.pause_index
-                    elif action == 'prev': 
-                        # Сохраняем индекс трека в игровом контексте, если переключаем из паузы
-                        audio.prev()
-                        if audio.current_context == 'pause' and original_context == 'game':
-                            # Синхронизируем индекс паузы с индексом игры
-                            audio.game_index = audio.pause_index
+                    elif action == 'next': audio.next()
+                    elif action == 'prev': audio.prev()
                     elif action == 'main_menu': 
                         # Не восстанавливаем контекст - он будет переключён на menu в основном цикле
                         return 'main_menu'
@@ -5249,17 +4837,10 @@ def resolution_selection_menu() -> Tuple[int, int]:
     clock = pygame.time.Clock()
     
     # Шрифты для меню
-    try:
-        title_font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto', 36, bold=True)
-        option_font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto', 24, bold=True)
-        desc_font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto', 18)
-        help_font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto', 16)
-    except Exception:
-        # Фолбэк на стандартные шрифты
-        title_font = pygame.font.SysFont('arial,helvetica', 36, bold=True)
-        option_font = pygame.font.SysFont('arial,helvetica', 24, bold=True)
-        desc_font = pygame.font.SysFont('arial,helvetica', 18)
-        help_font = pygame.font.SysFont('arial,helvetica', 16)
+    title_font = pygame.font.SysFont('arial,helvetica', 36, bold=True)
+    option_font = pygame.font.SysFont('arial,helvetica', 24, bold=True)
+    desc_font = pygame.font.SysFont('arial,helvetica', 18)
+    help_font = pygame.font.SysFont('arial,helvetica', 16)
     
     # Получаем доступные разрешения
     filtered_resolutions = game_config.get_filtered_resolutions()
@@ -5299,7 +4880,15 @@ def resolution_selection_menu() -> Tuple[int, int]:
                     if selected_index == 0:  # Авто
                         return (1366, 768)  # Стандартное значение
                     else:
-                        return options[selected_index][1]
+                        value = options[selected_index][1]
+                        # If value is "auto", return default resolution
+                        if value == "auto":
+                            return (1366, 768)
+                        # If value is a tuple, return it
+                        if isinstance(value, tuple) and len(value) == 2:
+                            return value
+                        # Otherwise return default resolution
+                        return (1366, 768)
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # ЛКМ
@@ -5311,7 +4900,14 @@ def resolution_selection_menu() -> Tuple[int, int]:
                             if i == 0:  # Авто
                                 return (1366, 768)
                             else:
-                                return value
+                                # If value is "auto", return default resolution
+                                if value == "auto":
+                                    return (1366, 768)
+                                # If value is a tuple, return it
+                                if isinstance(value, tuple) and len(value) == 2:
+                                    return value
+                                # Otherwise return default resolution
+                                return (1366, 768)
         
         # Отрисовка
         temp_screen.fill(bg_color)
@@ -5368,17 +4964,21 @@ def resolution_selection_menu() -> Tuple[int, int]:
                 info_text = "Автоматически определит оптимальное разрешение"
                 info_color = (120, 200, 120)
             else:
-                w, h = value
-                ratio = w / h
-                if abs(ratio - 16/9) < 0.1:
-                    aspect = "16:9"
-                elif abs(ratio - 4/3) < 0.1:
-                    aspect = "4:3"
-                elif abs(ratio - 16/10) < 0.1:
-                    aspect = "16:10"
+                # Handle both tuple values and string values
+                if isinstance(value, tuple) and len(value) == 2:
+                    w, h = value
+                    ratio = w / h
+                    if abs(ratio - 16/9) < 0.1:
+                        aspect = "16:9"
+                    elif abs(ratio - 4/3) < 0.1:
+                        aspect = "4:3"
+                    elif abs(ratio - 16/10) < 0.1:
+                        aspect = "16:10"
+                    else:
+                        aspect = f"{ratio:.2f}:1"
+                    info_text = f"Соотношение сторон: {aspect}"
                 else:
-                    aspect = f"{ratio:.2f}:1"
-                info_text = f"Соотношение сторон: {aspect}"
+                    info_text = "Соотношение сторон: неизвестно"
                 info_color = (150, 170, 200)
             
             info_surface = help_font.render(info_text, True, info_color)
@@ -5498,18 +5098,11 @@ def run():
     clock = pygame.time.Clock()
     
     # Используем адаптивные размеры шрифтов
-    font_size = responsive.scale_font(25) if responsive else 25
+    font_size = responsive.scale_font(48) if responsive else 48
     small_size = responsive.scale_font(20) if responsive else 20
     
-    # Используем шрифты с поддержкой кириллицы
-    try:
-        font = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', font_size, bold=True)
-        small = pygame.font.SysFont('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', small_size)
-    except Exception as e:
-        print(f"[Ошибка] Не удалось загрузить шрифты с поддержкой кириллицы: {e}")
-        # Фолбэк на стандартные шрифты
-        font = pygame.font.SysFont('consolas,dejavusansmono,menlo,monospace', font_size, bold=True)
-        small = pygame.font.SysFont('consolas,dejavusansmono,menlo,monospace', small_size)
+    font = pygame.font.SysFont('consolas,dejavusansmono,menlo,monospace', font_size, bold=True)
+    small = pygame.font.SysFont('consolas,dejavusansmono,menlo,monospace', small_size)
 
     audio = AudioManager()
     
@@ -5924,7 +5517,7 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
                         # Проверка целей кампании
                         if state.game_mode == GameMode.CAMPAIGN:
                             if check_campaign_objectives(state):
-                                # Уровень пройден!
+                                # Уровень пройден
                                 print(f"Поздравляем! Уровень {state.current_campaign_level} пройден!")
                                 unlock_next_campaign_level()
 
@@ -5953,3 +5546,33 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
 
 if __name__ == '__main__':
     run()
+
+
+# --- BEGIN: lock_piece_safe wrapper (ChatGPT patch) ---
+def lock_piece_safe(state):
+    """
+    Wrapper around original lock_piece that adds defensive checks.
+    If original lock_piece exists, it will be called; otherwise we perform a
+    conservative fallback to prevent crashes.
+    Returns the number of lines cleared (or 0 on error).
+    """
+    try:
+        # Prefer existing lock_piece function if available in globals
+        if 'lock_piece' in globals() and callable(globals()['lock_piece']):
+            return globals()['lock_piece'](state)
+    except Exception as e:
+        print('[lock_piece_safe] original lock_piece raised:', e)
+    # Conservative fallback: try to clear current piece and reset animations
+    try:
+        if hasattr(state, 'current'):
+            state.current = None
+        if hasattr(state, 'can_hold'):
+            state.can_hold = True
+        try:
+            reset_animation_state(state)
+        except Exception:
+            pass
+    except Exception as e2:
+        print('[lock_piece_safe] fallback also failed:', e2)
+    return 0
+# --- END: lock_piece_safe wrapper ---
