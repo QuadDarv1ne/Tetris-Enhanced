@@ -58,14 +58,27 @@ import json
 import random
 import time
 import math
+import logging
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.FileHandler("tetris_enhanced.log", encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger("TetrisEnhanced")
+
 try:
     import pygame
-except Exception:
-    print("This script requires pygame. Install with: pip install pygame")
+except ImportError:
+    logger.error("This script requires pygame. Install with: pip install pygame")
     raise
 
 # -------------------- Централизованная конфигурация игры --------------------
@@ -141,9 +154,15 @@ class GameConfig:
             if os.path.exists(filename):
                 with open(filename, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                logger.info(f"Configuration loaded from {filename}")
                 return cls(**data)
+            else:
+                logger.warning(f"Configuration file {filename} not found, using defaults")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in configuration file {filename}: {e}")
         except Exception as e:
-            print(f"[Конфиг] Ошибка загрузки конфигурации: {e}")
+            logger.error(f"Error loading configuration from {filename}: {e}")
+        logger.info("Using default configuration")
         return cls()  # Возвращаем стандартную конфигурацию
     
     def save_to_file(self, filename: str = "config.json") -> None:
@@ -183,9 +202,9 @@ class GameConfig:
             
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(config_dict, f, indent=2, ensure_ascii=False)
-            print(f"[Конфиг] Конфигурация сохранена в {filename}")
+            logger.info(f"Configuration saved to {filename}")
         except Exception as e:
-            print(f"[Конфиг] Ошибка сохранения: {e}")
+            logger.error(f"Error saving configuration to {filename}: {e}")
     
     def get_aspect_ratio(self) -> float:
         """Возвращает соотношение сторон экрана"""
@@ -220,8 +239,12 @@ class GameConfig:
                     (1366, 768), (1440, 900), (1600, 900)
                 ]
                 for w, h in safe_resolutions:
-                    if (w, h) not in filtered and w <= max_width and h <= max_height:
+                    if (w, h) not in filtered and w >= min_width and h >= min_height and w <= max_width and h <= max_height:
                         filtered.append((w, h))
+            
+            # Убедимся, что у нас есть хотя бы минимальное разрешение
+            if not filtered:
+                filtered.append((min_width, min_height))
             
             return sorted(filtered, key=lambda x: x[0] * x[1])  # Сортируем по площади
             
@@ -231,6 +254,7 @@ class GameConfig:
                 (800, 600), (1024, 768), (1280, 720), (1280, 800),
                 (1366, 768), (1440, 900), (1600, 900), (1920, 1080)
             ]
+            print(f"[Конфиг] Ошибка фильтрации разрешений: {e}. Используется фолбэк.")
             return fallback
 
 # Глобальная конфигурация
@@ -273,6 +297,7 @@ class GameModeConfig:
     description: str
     gravity_multiplier: float = 1.0  # Множитель скорости падения
     scoring_multiplier: float = 1.0  # Множитель очков
+
     level_progression: bool = True   # Автоматическое повышение уровня
     max_level: Optional[int] = None  # Максимальный уровень (None = без лимита)
 
@@ -398,9 +423,9 @@ class AdvancedResponsiveDesign:
         # Настройки производительности на основе устройства
         self.performance_profile = self._get_performance_profile()
         
-        print(f"[AdvancedResponsiveDesign] Initialized for {screen_width}x{screen_height}")
-        print(f"[AdvancedResponsiveDesign] Device: {self.device_class}, Aspect: {self.aspect_type}, DPI: {self.dpi_category}")
-        print(f"[AdvancedResponsiveDesign] Scale factors: {self.scale_factors}")
+        logger.info(f"[AdvancedResponsiveDesign] Initialized for {screen_width}x{screen_height}")
+        logger.info(f"[AdvancedResponsiveDesign] Device: {self.device_class}, Aspect: {self.aspect_type}, DPI: {self.dpi_category}")
+        logger.info(f"[AdvancedResponsiveDesign] Scale factors: {self.scale_factors}")
     
     def _detect_device_class(self) -> str:
         """Интеллектуальное определение класса устройства"""
@@ -512,10 +537,29 @@ class AdvancedResponsiveDesign:
         max_items = self.performance_profile["max_cache_items"]
         for cache_type, cache in self._unified_cache.items():
             if len(cache) > max_items:
+                # Remove oldest items first (FIFO approach)
                 items_to_remove = len(cache) - max_items + 10
-                for _ in range(items_to_remove):
-                    if cache:
-                        cache.pop(next(iter(cache)))
+                keys_to_remove = list(cache.keys())[:items_to_remove]
+                for key in keys_to_remove:
+                    cache.pop(key, None)
+    
+    def clear_caches(self):
+        """Очищает все кэши"""
+        for cache in self._unified_cache.values():
+            cache.clear()
+        print("[AdvancedResponsiveDesign] All caches cleared")
+    
+    # Добавляем метод для периодической очистки кэша
+    def periodic_cache_cleanup(self, force=False):
+        """Периодическая очистка кэша для предотвращения утечек памяти"""
+        # Очищаем кэш если он превышает в 2 раза максимальный размер
+        total_items = sum(len(cache) for cache in self._unified_cache.values())
+        max_total_items = self.performance_profile["max_cache_items"] * len(self._unified_cache)
+        
+        if force or total_items > max_total_items * 2:
+            self.clear_caches()
+            return True
+        return False
     
     # ================ Методы компоновки и позиционирования ================
     
@@ -2286,8 +2330,11 @@ class AudioManager:
         # initialize mixer safely
         try:
             pygame.mixer.init()
-        except Exception:
-            pass
+            pygame.mixer.music.set_endevent(MUSIC_END_EVENT)
+        except Exception as e:
+            print(f"[Audio] Failed to initialize audio: {e}")
+            self.enabled = False
+            return
         
         # Создаём раздельные плейлисты для меню, паузы и игры
         self.menu_playlist = [f for f in MENU_MUSIC_FILES if os.path.isfile(f)]
@@ -2302,193 +2349,137 @@ class AudioManager:
             self.menu_playlist = self.game_playlist.copy()
         elif not self.game_playlist and self.menu_playlist:
             self.game_playlist = self.menu_playlist.copy()
-            
-        self.menu_index = 0
-        self.pause_index = 0
-        self.game_index = 0
-        self.current_context = 'menu'  # Начинаем с меню
         
-        # Для обратной совместимости
-        self.playlist = self.menu_playlist if self.menu_playlist else self.game_playlist
+        # Инициализация индексов
+        self.menu_index = 0
+        self.game_index = 0
+        self.pause_index = 0
+        self.current_context = "menu"
+        
+        # Установка начального плейлиста
+        self.playlist = self.menu_playlist
         self.index = 0
         
-        self.enabled = len(self.menu_playlist) > 0 or len(self.game_playlist) > 0
-        pygame.mixer.music.set_endevent(MUSIC_END_EVENT)
-        self.sounds = {}
+        # Scan for music files
+        self._scan_music()
         
-        # load sfx if available
-        if os.path.isdir(SOUNDS_DIR):
-            for name in ['rotate', 'drop', 'line']:
-                path = os.path.join(SOUNDS_DIR, f"{name}.wav")
-                if os.path.isfile(path):
-                    try:
-                        self.sounds[name] = pygame.mixer.Sound(path)
-                    except Exception:
-                        self.sounds[name] = None
-        # default volume
-        try:
-            pygame.mixer.music.set_volume(0.5)
-        except Exception:
-            pass
+        if not self.playlist:
+            print("[Audio] No music files found")
+            self.enabled = False
+        else:
+            self.enabled = True
+            # Начинаем воспроизведение музыки сразу после создания
+            self.play_current()
     
-    def set_context(self, context: str):
-        """Переключает контекст музыки между 'menu', 'pause' и 'game'."""
-        if context not in ['menu', 'pause', 'game']:
+    def _scan_music(self):
+        """Scan for music files in the music directory and categorize them."""
+        music_dir = "music"
+        if not os.path.isdir(music_dir):
+            print("[Audio] Music directory not found")
+            return
+        
+        try:
+            for root, dirs, files in os.walk(music_dir):
+                for fname in sorted(files):
+                    if fname.lower().endswith(('.mp3', '.ogg', '.wav')):
+                        full_path = os.path.join(root, fname)
+                        # Categorize music based on directory or filename
+                        if 'menu' in root.lower() or 'menu' in fname.lower():
+                            self.menu_playlist.append(full_path)
+                        elif 'pause' in root.lower() or 'pause' in fname.lower():
+                            self.pause_playlist.append(full_path)
+                        elif 'game' in root.lower() or 'game' in fname.lower():
+                            self.game_playlist.append(full_path)
+                        else:
+                            # Default to menu music if no category specified
+                            self.menu_playlist.append(full_path)
+            
+            # Set the default playlist to menu music
+            self.playlist = self.menu_playlist if self.menu_playlist else (self.game_playlist or self.pause_playlist or [])
+        except Exception as e:
+            print(f"[Audio] Error scanning music files: {e}")
+            self.playlist = []
+    
+    def play_current(self):
+        """Play the current track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        try:
+            pygame.mixer.music.load(self.playlist[self.index])
+            pygame.mixer.music.play(-1)  # Loop indefinitely
+        except Exception as e:
+            print(f"[Audio] Failed to play track '{self.playlist[self.index]}': {e}")
+            # Try to continue with next track
+            self.next()
+    
+    def next(self):
+        """Play the next track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        try:
+            self.index = (self.index + 1) % len(self.playlist)
+            self.play_current()
+        except Exception as e:
+            print(f"[Audio] Failed to play next track: {e}")
+    
+    def prev(self):
+        """Play the previous track."""
+        if not self.enabled or not self.playlist:
+            return
+        
+        try:
+            self.index = (self.index - 1) % len(self.playlist)
+            self.play_current()
+        except Exception as e:
+            print(f"[Audio] Failed to play previous track: {e}")
+    
+    def set_context(self, context):
+        """Set the audio context (menu, game, pause) and switch playlists."""
+        if context not in ['menu', 'game', 'pause']:
             return
             
         old_context = self.current_context
         self.current_context = context
         
-        # Обновляем текущий плейлист и индекс для обратной совместимости
+        # Сохраняем индекс для старого контекста
+        if old_context == 'menu':
+            self.menu_index = self.index
+        elif old_context == 'game':
+            self.game_index = self.index
+        elif old_context == 'pause':
+            self.pause_index = self.index
+        
+        # Переключаемся на новый плейлист
         if context == 'menu':
             self.playlist = self.menu_playlist
             self.index = self.menu_index
+        elif context == 'game':
+            self.playlist = self.game_playlist
+            self.index = self.game_index
         elif context == 'pause':
             self.playlist = self.pause_playlist
             self.index = self.pause_index
-        else:
-            self.playlist = self.game_playlist
-            self.index = self.game_index
-            
-        # Если контекст изменился и есть музыка, начинаем воспроизведение
-        if old_context != context and self.enabled and len(self.playlist) > 0:
+        
+        # Если плейлист пуст, используем фолбэк
+        if not self.playlist:
+            self.playlist = self.menu_playlist or self.game_playlist or self.pause_playlist or []
+            self.index = 0
+        
+        # Воспроизводим музыку
+        if self.playlist:
             self.play_current()
     
     def get_current_playlist(self):
-        """Возвращает текущий активный плейлист."""
-        if self.current_context == 'menu':
-            return self.menu_playlist
-        elif self.current_context == 'pause':
-            return self.pause_playlist
-        else:
-            return self.game_playlist
+        """Get the current playlist."""
+        return self.playlist
     
-    def get_current_index(self):
-        """Возвращает текущий индекс в активном плейлисте."""
-        if self.current_context == 'menu':
-            return self.menu_index
-        elif self.current_context == 'pause':
-            return self.pause_index
-        else:
-            return self.game_index
-    
-    def set_current_index(self, index: int):
-        """Устанавливает индекс в текущем плейлисте."""
-        playlist = self.get_current_playlist()
-        if not playlist:
-            return
-            
-        index = max(0, min(index, len(playlist) - 1))
-        
-        if self.current_context == 'menu':
-            self.menu_index = index
-        elif self.current_context == 'pause':
-            self.pause_index = index
-        else:
-            self.game_index = index
-            
-        # Обновляем для обратной совместимости
-        self.index = index
-        self.playlist = playlist
-
-    def play_current(self):
-        """
-        Воспроизводит текущий трек из активного плейлиста.
-        Обрабатывает ошибки загрузки файлов.
-        """
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        if current_index >= len(current_playlist):
-            current_index = 0
-            self.set_current_index(current_index)
-            
-        path = current_playlist[current_index]
-        try:
-            pygame.mixer.music.load(path)
-            pygame.mixer.music.play()
-            print(f"[AudioManager] Playing {self.current_context} music: {os.path.basename(path)}")
-        except Exception as e:
-            print('Failed to play', path, e)
-
-    def next(self):
-        """Переключает на следующий трек в текущем плейлисте."""
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        new_index = (current_index + 1) % len(current_playlist)
-        self.set_current_index(new_index)
-        self.play_current()
-
-    def prev(self):
-        """Переключает на предыдущий трек в текущем плейлисте."""
-        if not self.enabled:
-            return
-            
-        current_playlist = self.get_current_playlist()
-        if not current_playlist:
-            return
-            
-        current_index = self.get_current_index()
-        new_index = (current_index - 1) % len(current_playlist)
-        self.set_current_index(new_index)
-        self.play_current()
-
-    def stop(self):
-        try:
-            pygame.mixer.music.stop()
-        except Exception:
-            pass
-
-    def play_sfx(self, name: str):
-        s = self.sounds.get(name)
-        if s:
-            try:
-                s.play()
-            except Exception:
-                pass
-
-def draw_enhanced_background(surf):
-    """Рисует улучшенный фон для главной игры"""
-    # Основной градиентный фон
-    screen_rect = pygame.Rect(0, 0, WIDTH, HEIGHT)
-    draw_gradient_rect(surf, screen_rect, BG_GRADIENT_TOP, BG_GRADIENT_BOTTOM)
-    
-    # Анимированные декоративные элементы
-    current_time = time.time()
-    # Геометрические фигуры в стиле тетриса
-    for i in range(6):
-        # Плавная анимация позиции
-        offset = math.sin(current_time * 0.5 + i * 0.8) * 20
-        x = WIDTH - 80 + (i % 3) * 30 + offset * 0.3
-        y = 100 + i * 90 + offset
-        size = 15 + (i % 2) * 5
-        
-        # Пульсирующая прозрачность
-        alpha = int(40 + 30 * math.sin(current_time * 1.2 + i * 0.5))
-        
-        # Мини-блоки как у тетромино
-        decoration_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        deco_color = list(COLORS.values())[i % len(COLORS)]
-        decoration_surf.fill((*deco_color, alpha))
-        surf.blit(decoration_surf, (x, y))
-        
-        # Левая сторона с другой скоростью анимации
-        x_left = 20 + (i % 2) * 25 + math.cos(current_time * 0.7 + i) * 15
-        y_left = 150 + i * 80 + math.sin(current_time * 0.3 + i) * 10
-        decoration_left = pygame.Surface((size, size), pygame.SRCALPHA)
-        decoration_left.fill((*deco_color, alpha//2))
-        surf.blit(decoration_left, (x_left, y_left))
+    def set_current_index(self, index):
+        """Set the current track index."""
+        if 0 <= index < len(self.playlist):
+            self.index = index
+            self.play_current()
 
 # -------------------- Smooth Animation Utilities --------------------
 def smooth_lerp(start, end, t):
@@ -2497,6 +2488,16 @@ def smooth_lerp(start, end, t):
     t = max(0, min(1, t))
     smooth_t = t * t * (3 - 2 * t)  # Smoothstep
     return start + (end - start) * smooth_t
+
+def draw_enhanced_background(surf):
+    """Draw an enhanced background with gradients."""
+    # Simple gradient background
+    for y in range(HEIGHT):
+        ratio = y / HEIGHT
+        r = int(BG_GRADIENT_TOP[0] * (1 - ratio) + BG_GRADIENT_BOTTOM[0] * ratio)
+        g = int(BG_GRADIENT_TOP[1] * (1 - ratio) + BG_GRADIENT_BOTTOM[1] * ratio)
+        b = int(BG_GRADIENT_TOP[2] * (1 - ratio) + BG_GRADIENT_BOTTOM[2] * ratio)
+        pygame.draw.line(surf, (r, g, b), (0, y), (WIDTH, y))
 
 def pulse_effect(time_offset=0.0, frequency=1.0, amplitude=1.0):
     """Создает пульсирующий эффект"""
@@ -2511,6 +2512,7 @@ def wave_effect(time_offset=0.0, frequency=0.5, amplitude=10):
 def glow_color(base_color, intensity=0.3, time_offset=0.0):
     """Создает эффект свечения цвета"""
     glow = pulse_effect(time_offset, 0.8, intensity)
+
     return tuple(min(255, int(c + c * glow)) for c in base_color)
 
 def draw_enhanced_adaptive_text(surface, text: str, rect: pygame.Rect, font_size: int = 24,
@@ -3353,6 +3355,84 @@ def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
         return state
     except Exception as e:
         print('Ошибка загрузки:', e)
+        return None
+
+def save_game_state(state, filename="saves/tetris_save.json"):
+    """Сохраняет состояние игры в JSON файл."""
+    try:
+        # Создаем папку saves если её нет
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Подготавливаем данные для сохранения
+        save_data = {
+            "grid": state.grid,
+            "bag": state.bag,
+            "next_queue": state.next_queue,
+            "current": {
+                "kind": state.current.kind,
+                "x": state.current.x,
+                "y": state.current.y,
+                "rotation": state.current.rotation
+            } if state.current else None,
+            "hold": {
+                "kind": state.hold.kind,
+                "rotation": state.hold.rotation
+            } if state.hold else None,
+            "score": state.score,
+            "level": state.level,
+            "lines": state.lines,
+            "combo": state.combo,
+            "back_to_back": state.back_to_back,
+            "timestamp": time.time()
+        }
+        
+        # Сохраняем в файл
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"[Save] Game state saved to {filename}")
+        return True
+        
+    except Exception as e:
+        print(f"[Save] Error saving game state: {e}")
+        return False
+
+def load_game_state(filename="saves/tetris_save.json"):
+    """Загружает состояние игры из JSON файла."""
+    try:
+        # Проверяем существование файла
+        if not os.path.exists(filename):
+            print(f"[Load] Save file {filename} not found")
+            return None
+        
+        # Загружаем данные
+        with open(filename, 'r', encoding='utf-8') as f:
+            save_data = json.load(f)
+        
+        # Проверяем минимально необходимые поля
+        required_fields = ["grid", "bag", "next_queue", "score", "level", "lines"]
+        for field in required_fields:
+            if field not in save_data:
+                raise ValueError(f"Missing required field in save file: {field}")
+        
+        # Проверяем целостность данных
+        if not isinstance(save_data["grid"], list) or len(save_data["grid"]) != 20:
+            raise ValueError("Invalid grid data in save file")
+        
+        if not isinstance(save_data["bag"], list) or not all(isinstance(x, int) for x in save_data["bag"]):
+            raise ValueError("Invalid bag data in save file")
+        
+        print(f"[Load] Game state loaded from {filename}")
+        return save_data
+        
+    except json.JSONDecodeError as e:
+        print(f"[Load] Invalid JSON in save file: {e}")
+        return None
+    except ValueError as e:
+        print(f"[Load] Invalid save data: {e}")
+        return None
+    except Exception as e:
+        print(f"[Load] Error loading game state: {e}")
         return None
 
 # -------------------- Menus --------------------
