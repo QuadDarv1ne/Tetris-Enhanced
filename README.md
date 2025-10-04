@@ -1,5 +1,7 @@
 # Tetris Enhanced — Инструкция
 
+[![DOI](https://zenodo.org/badge/1042618379.svg)](https://doi.org/10.5281/zenodo.17264455)
+
 ## Описание
 
 Этот репозиторий содержит улучшенную версию игры Tetris на Python (один файл): `tetris_enhanced.py`.
