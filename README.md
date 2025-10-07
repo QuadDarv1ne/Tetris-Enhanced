@@ -1,6 +1,7 @@
 # Tetris Enhanced — Инструкция
 
 [![DOI](https://zenodo.org/badge/1042618379.svg)](https://doi.org/10.5281/zenodo.17264455)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0007--7605--539X-green?logo=orcid&logoColor=white)](https://orcid.org/0009-0007-7605-539X)
 
 ## Описание
 
