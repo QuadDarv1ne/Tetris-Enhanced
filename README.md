@@ -115,3 +115,5 @@
 ※ Предложения по сотрудничеству можете присылать на почту ※
 📧 maksimqwe42@mail.ru
 ```
+
+[![Star History Chart](https://api.star-history.com/svg?repos=QuadDarv1ne/Tetris-Enhanced&type=Date)](https://star-history.com/#QuadDarv1ne/Tetris-Enhanced&Date)
