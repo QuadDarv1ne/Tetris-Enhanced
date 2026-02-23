@@ -732,14 +732,9 @@ class AdvancedResponsiveDesign:
                 "render_quality": "low"
             }
         }
-        
+
         return settings[performance_class]
-    
-    def clear_caches(self):
-        """Очищает все кэши"""
-        for cache in self._unified_cache.values():
-            cache.clear()
-    
+
     def get_panel_position(self, field_x: int, field_width: int):
         """Возвращает оптимальную позицию и размеры боковой панели"""
         margin = self.get_margin(25)
@@ -883,52 +878,22 @@ class AdvancedResponsiveDesign:
         
         self._unified_cache['layouts'][cache_key] = result
         return result
-    
-    def get_visual_hierarchy_sizes(self) -> dict:
-        """Возвращает размеры шрифтов для визуальной иерархии"""
-        cache_key = f"hierarchy_{self.device_class}_{self.dpi_category}"
+
+    def get_visual_hierarchy_sizes(self, base_size: int = 24) -> dict:
+        """
+        Возвращает размеры для создания визуальной иерархии.
         
+        Args:
+            base_size: Базовый размер шрифта (по умолчанию 24)
+        """
+        cache_key = f"hierarchy_{base_size}_{self.device_class}_{self.dpi_category}"
+
         if cache_key in self._unified_cache['layouts']:
             return self._unified_cache['layouts'][cache_key]
-        
-        # Базовые размеры (модульная шкала 1.25)
-        base_sizes = {
-            "h1": 48,      # Основной заголовок
-            "h2": 38,      # Вторичные заголовки
-            "h3": 30,      # Подзаголовки
-            "heading": 26, # Обычные заголовки
-            "body": 20,    # Основной текст
-            "caption": 16, # Подписи
-            "small": 14    # Маленький текст
-        }
-        
-        # Масштабирование с учетом агрессивного масштабирования
-        result = {}
-        for key, size in base_sizes.items():
-            scaled_size = self.scale_font(size)
-            
-            # Минимальные размеры для читаемости (согласно memory)
-            min_sizes = {
-                "h1": 32, "h2": 26, "h3": 22, "heading": 20,
-                "body": 18, "caption": 16, "small": 14
-            }
-            
-            scaled_size = max(min_sizes.get(key, 14), scaled_size)
-            result[key] = scaled_size
-        
-        self._unified_cache['layouts'][cache_key] = result
-        return result
-    
-    def get_visual_hierarchy_sizes(self, base_size: int = 24) -> dict:
-        """Возвращает размеры для создания визуальной иерархии"""
-        cache_key = f"hierarchy_{base_size}"
-        
-        if cache_key in self._unified_cache['fonts']:
-            return self._unified_cache['fonts'][cache_key]
-        
+
         # Базовый размер с учетом устройства
         scaled_base = self.scale_font(base_size)
-        
+
         # Иерархия размеров (на основе модульной шкалы)
         hierarchy = {
             'title': int(scaled_base * 2.0),      # Главный заголовок
@@ -938,7 +903,7 @@ class AdvancedResponsiveDesign:
             'caption': int(scaled_base * 0.875),  # Подпись
             'small': int(scaled_base * 0.75)      # Мелкий текст
         }
-        
+
         # Ограничения по устройству
         device_limits = {
             "ultra_high": {"min": 14, "max": 96},
@@ -946,14 +911,14 @@ class AdvancedResponsiveDesign:
             "medium": {"min": 10, "max": 56},
             "low": {"min": 8, "max": 42}
         }[self.device_class]
-        
+
         # Применяем ограничения
         for key in hierarchy:
             hierarchy[key] = max(device_limits["min"], min(device_limits["max"], hierarchy[key]))
-        
-        self._unified_cache['fonts'][cache_key] = hierarchy
+
+        self._unified_cache['layouts'][cache_key] = hierarchy
         return hierarchy
-    
+
     def get_enhanced_positioning_system(self, elements: list, container_rect: tuple,
                                       positioning_strategy: str = "auto") -> list:
         """Продвинутая система позиционирования с предотвращением коллизий"""
@@ -3335,104 +3300,30 @@ def ensure_save_directory():
         print(f'Создана папка для сохранений: {SAVE_DIR}')
 
 def save_game(state: GameState, filename: str = SAVE_FILE):
+    """Сохраняет состояние игры в JSON файл."""
     try:
-        ensure_save_directory()  # Убеждаемся, что папка существует
+        ensure_save_directory()
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
-        print('Игра сохранена в', filename)
+        print(f'Игра сохранена в {filename}')
+        return True
     except Exception as e:
-        print('Ошибка сохранения:', e)
+        print(f'Ошибка сохранения: {e}')
+        return False
 
 def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
+    """Загружает состояние игры из JSON файла."""
     if not os.path.isfile(filename):
-        print('Файл сохранения не найден:', filename)
+        print(f'Файл сохранения не найден: {filename}')
         return None
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             d = json.load(f)
         state = GameState.from_dict(d)
-        print('Игра загружена из', filename)
+        print(f'Игра загружена из {filename}')
         return state
     except Exception as e:
-        print('Ошибка загрузки:', e)
-        return None
-
-def save_game_state(state, filename="saves/tetris_save.json"):
-    """Сохраняет состояние игры в JSON файл."""
-    try:
-        # Создаем папку saves если её нет
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
-        # Подготавливаем данные для сохранения
-        save_data = {
-            "grid": state.grid,
-            "bag": state.bag,
-            "next_queue": state.next_queue,
-            "current": {
-                "kind": state.current.kind,
-                "x": state.current.x,
-                "y": state.current.y,
-                "rotation": state.current.rotation
-            } if state.current else None,
-            "hold": {
-                "kind": state.hold.kind,
-                "rotation": state.hold.rotation
-            } if state.hold else None,
-            "score": state.score,
-            "level": state.level,
-            "lines": state.lines,
-            "combo": state.combo,
-            "back_to_back": state.back_to_back,
-            "timestamp": time.time()
-        }
-        
-        # Сохраняем в файл
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(save_data, f, indent=2, ensure_ascii=False)
-        
-        print(f"[Save] Game state saved to {filename}")
-        return True
-        
-    except Exception as e:
-        print(f"[Save] Error saving game state: {e}")
-        return False
-
-def load_game_state(filename="saves/tetris_save.json"):
-    """Загружает состояние игры из JSON файла."""
-    try:
-        # Проверяем существование файла
-        if not os.path.exists(filename):
-            print(f"[Load] Save file {filename} not found")
-            return None
-        
-        # Загружаем данные
-        with open(filename, 'r', encoding='utf-8') as f:
-            save_data = json.load(f)
-        
-        # Проверяем минимально необходимые поля
-        required_fields = ["grid", "bag", "next_queue", "score", "level", "lines"]
-        for field in required_fields:
-            if field not in save_data:
-                raise ValueError(f"Missing required field in save file: {field}")
-        
-        # Проверяем целостность данных
-        if not isinstance(save_data["grid"], list) or len(save_data["grid"]) != 20:
-            raise ValueError("Invalid grid data in save file")
-        
-        if not isinstance(save_data["bag"], list) or not all(isinstance(x, int) for x in save_data["bag"]):
-            raise ValueError("Invalid bag data in save file")
-        
-        print(f"[Load] Game state loaded from {filename}")
-        return save_data
-        
-    except json.JSONDecodeError as e:
-        print(f"[Load] Invalid JSON in save file: {e}")
-        return None
-    except ValueError as e:
-        print(f"[Load] Invalid save data: {e}")
-        return None
-    except Exception as e:
-        print(f"[Load] Error loading game state: {e}")
+        print(f'Ошибка загрузки: {e}')
         return None
 
 # -------------------- Menus --------------------
@@ -3600,60 +3491,15 @@ def get_adaptive_font(text: str, base_font, max_width: int, max_height: int, use
     # Финальный результат
     final_font = get_cached_font(font_path, current_size, is_bold)
     _adaptive_font_cache[cache_key] = final_font
-    
+
     # Ограничиваем размер кэша
     if len(_adaptive_font_cache) > 30:
         oldest_keys = list(_adaptive_font_cache.keys())[:10]
         for old_key in oldest_keys:
             del _adaptive_font_cache[old_key]
-    
+
     return final_font
-    
-    if estimated_width > max_width:
-        scale_factor = max_width / estimated_width
-        current_size = max(8, int(current_size * scale_factor * 0.9))
-    
-    # Точная проверка (максимум 5 итераций)
-    for attempt in range(5):
-        try:
-            test_font = get_cached_font(font_path, current_size, is_bold)
-            text_surface = test_font.render(text, True, (255, 255, 255))
-            
-            if (text_surface.get_width() <= max_width and 
-                text_surface.get_height() <= max_height):
-                # Пытаемся увеличить (но не больше базового)
-                max_allowed_size = int(base_size * 0.85)
-                if current_size < max_allowed_size and attempt < 2:
-                    larger_size = min(current_size + 1, max_allowed_size)
-                    larger_font = get_cached_font(font_path, larger_size, is_bold)
-                    larger_surface = larger_font.render(text, True, (255, 255, 255))
-                    
-                    if (larger_surface.get_width() <= max_width and 
-                        larger_surface.get_height() <= max_height):
-                        current_size = larger_size
-                        continue
-                
-                # Текущий размер оптимален
-                _adaptive_font_cache[cache_key] = test_font
-                return test_font
-            else:
-                # Уменьшаем размер
-                current_size = max(8, current_size - max(1, current_size // 15))
-                
-        except Exception:
-            current_size = max(8, current_size - 2)
-    
-    # Финальный результат
-    final_font = get_cached_font(font_path, current_size, is_bold)
-    _adaptive_font_cache[cache_key] = final_font
-    
-    # Ограничиваем размер кэша
-    if len(_adaptive_font_cache) > 30:
-        oldest_keys = list(_adaptive_font_cache.keys())[:10]
-        for old_key in oldest_keys:
-            del _adaptive_font_cache[old_key]
-    
-    return final_font
+
 
 def init_responsive_design_with_config():
     """

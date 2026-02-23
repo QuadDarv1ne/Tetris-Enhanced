@@ -202,14 +202,16 @@ class ConfigTests:
     def test_config_resolution_filter():
         """Тест фильтрации разрешений"""
         from game_config import GameConfig
-        
+
         config = GameConfig()
         config.screen_width = 1920
         config.screen_height = 1080
-        
+
         resolutions = config.get_filtered_resolutions()
         assert len(resolutions) > 0, "No resolutions found"
-        assert (800, 600) in resolutions, "Minimum resolution not found"
+        # Проверяем что разрешения 16:9 присутствуют
+        assert (1280, 720) in resolutions, "HD resolution not found"
+        assert (1920, 1080) in resolutions, "Full HD resolution not found"
     
     @staticmethod
     def test_config_aspect_ratio():

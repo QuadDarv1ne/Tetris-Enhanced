@@ -135,5 +135,27 @@ class GameConfig:
         except Exception as e:
             logger.error(f"Error saving configuration to {filename}: {e}")
 
+    def get_aspect_ratio(self) -> float:
+        """Возвращает соотношение сторон экрана (width / height)"""
+        return self.screen_width / self.screen_height
+
+    def get_filtered_resolutions(self) -> List[Tuple[int, int]]:
+        """
+        Возвращает список разрешений, отфильтрованных по текущему соотношению сторон.
+        Разрешения с отличающимся соотношением сторон исключаются.
+        """
+        current_aspect = self.get_aspect_ratio()
+        tolerance = 0.25  # Допустимое отклонение (25%) - включает близкие соотношения
+        
+        filtered = []
+        for width, height in self.available_resolutions:
+            aspect = width / height
+            if abs(aspect - current_aspect) <= tolerance:
+                filtered.append((width, height))
+        
+        # Если ни одно разрешение не подошло, возвращаем все
+        return filtered if filtered else list(self.available_resolutions)
+
+
 # Глобальная конфигурация
 game_config = GameConfig.load_from_file()
