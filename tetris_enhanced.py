@@ -5855,6 +5855,13 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
             # If animation finished, set position and lock
             if t >= 1.0:
                 state.current.y = state.hard_drop_target_y
+                
+                # Particle effect for hard drop
+                if PARTICLES_ENABLED:
+                    field_center_x = ORIGIN_X + PLAY_W // 2
+                    drop_y = ORIGIN_Y + (state.hard_drop_target_y + 1) * 30
+                    particle_system.emit_at(field_center_x, drop_y, 'drop')
+                
                 # finalize lock
                 lock_piece(state)
                 ghost_cache = None  # Сброс кэша ghost
