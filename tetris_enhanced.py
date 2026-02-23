@@ -1405,6 +1405,10 @@ PLAYFIELD_BG = (20, 24, 32)
 PLAYFIELD_BORDER = (50, 60, 75)
 PLAYFIELD_GRID = (30, 37, 47)
 
+# Размеры блоков и константы отрисовки
+BLOCK_SIZE = BLOCK - 1  # Размер блока для отрисовки (на 1 пиксель меньше для зазоров)
+BLOCK_CORNER_RADIUS = 8  # Радиус закругления блоков
+
 # Tetromino colors - Улучшенные яркие цвета с лучшим контрастом (I, O, T, S, Z, J, L)
 COLORS = {
     'I': (0, 184, 255),      # Яркий голубой - классика Tetris
@@ -2812,16 +2816,16 @@ def draw_enhanced_panel(surf, rect, title=None, font=None, animated=False):
 
 # -------------------- Enhanced Drawing --------------------
 def draw_block(surf, x, y, color, border=True, alpha=None, enhanced=True, animate_glow=False, kind=None):
-    rect = pygame.Rect(x, y, BLOCK-1, BLOCK-1)
-    corner_radius = 8  # Увеличиваем радиус закругления для более мягкого вида
-    
+    rect = pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE)
+    corner_radius = BLOCK_CORNER_RADIUS
+
     if enhanced:
         # Полная заливка цветом без градиентов
         base_color = color
         # Полная заливка цветом с отблесками
         if alpha is not None:
             # Полупрозрачный блок (для ghost piece)
-            block_surf = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
+            block_surf = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
             pygame.draw.rect(block_surf, (*base_color, alpha), block_surf.get_rect(), border_radius=corner_radius)
             surf.blit(block_surf, rect.topleft)
         else:
@@ -2853,7 +2857,7 @@ def draw_block(surf, x, y, color, border=True, alpha=None, enhanced=True, animat
     else:
         # Оригинальная отрисовка с закругленными углами
         if alpha is not None:
-            block = pygame.Surface((BLOCK-1, BLOCK-1), pygame.SRCALPHA)
+            block = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
             c = (*color, alpha)
             pygame.draw.rect(block, c, block.get_rect(), border_radius=corner_radius)
             surf.blit(block, rect.topleft)
