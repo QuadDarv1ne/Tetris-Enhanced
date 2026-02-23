@@ -1878,6 +1878,10 @@ class GameState:
     # Animation drawing position
     _anim_draw_y: int = 0
     
+    # Кэш для ghost piece
+    _ghost_cache: Optional[Piece] = None
+    _ghost_cache_key: tuple = None
+
     # Игровой режим и прогресс
     game_mode: GameMode = GameMode.ENDLESS_IMMERSIVE
     current_campaign_level: int = 1
@@ -2155,7 +2159,7 @@ def spawn_next(state: GameState):
     Создает новую падающую фигуру из очереди.
     
     Заполняет очередь следующих фигур до 5 элементов и берёт первую для создания текущей фигуры.
-    
+
     Args:
         state: Текущее состояние игры
     """
@@ -2168,18 +2172,19 @@ def spawn_next(state: GameState):
     if collides(state, piece):
         state.game_over = True
     state.current = piece
+    state._ghost_cache = None  # Сбрасываем кэш ghost
     # Полный сброс состояния анимации для новой фигуры
     reset_animation_state(state)
 
 def try_move(state: GameState, dx: int, dy: int) -> bool:
     """
     Пытается сдвинуть текущую фигуру на указанное расстояние.
-    
+
     Args:
         state: Текущее состояние игры
         dx: Сдвиг по оси X (столбцам)
         dy: Сдвиг по оси Y (строкам)
-        
+
     Returns:
         True, если движение возможно, иначе False
     """
@@ -2188,19 +2193,20 @@ def try_move(state: GameState, dx: int, dy: int) -> bool:
     p = Piece(state.current.kind, state.current.x + dx, state.current.y + dy, state.current.r)
     if not collides(state, p):
         state.current = p
+        state._ghost_cache = None  # Сбрасываем кэш ghost
         return True
     return False
 
 def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
     """
     Пытается повернуть текущую фигуру с проверкой wall kick'ов.
-    
+
     Использует систему SRS (Super Rotation System) для попыток поворота в нескольких позициях.
-    
+
     Args:
         state: Текущее состояние игры
         dr: Направление поворота (+1 по часовой, -1 против)
-        
+
     Returns:
         Кортеж (удалось ли повернуть, тип T-спина)
     """
@@ -2215,6 +2221,7 @@ def try_rotate(state: GameState, dr: int) -> Tuple[bool, str]:
         cand = Piece(cur.kind, cur.x + dx, cur.y + dy, to_r)
         if not collides(state, cand):
             state.current = cand
+            state._ghost_cache = None  # Сбрасываем кэш ghost
             return True, is_t_spin(state, cand, kicked=(dx != 0 or dy != 0))
     return False, 'none'
 
@@ -2244,20 +2251,33 @@ def hard_drop_distance(state: GameState) -> int:
 def ghost_position(state: GameState) -> Optional[Piece]:
     """
     Создает "призрачную" копию текущей фигуры в позиции приземления.
-    
+    Кэширует результат для оптимизации производительности.
+
     Показывает игроку, где приземлится фигура при быстром падении.
-    
+
     Args:
         state: Текущее состояние игры
-        
+
     Returns:
         Копия текущей фигуры в позиции приземления или None, если нет текущей фигуры
     """
     if state.current is None:
         return None
+    
+    # Проверяем кэш
+    cache_key = (state.current.x, state.current.y, state.current.r, state.current.kind)
+    if state._ghost_cache is not None and state._ghost_cache_key == cache_key:
+        return state._ghost_cache
+    
     d = hard_drop_distance(state)
     p = state.current
-    return Piece(p.kind, p.x, p.y + d, p.r)
+    ghost = Piece(p.kind, p.x, p.y + d, p.r)
+    
+    # Сохраняем в кэш
+    state._ghost_cache = ghost
+    state._ghost_cache_key = cache_key
+    
+    return ghost
 
 def hold_swap(state: GameState):
     """
