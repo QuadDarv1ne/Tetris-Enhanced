@@ -10,7 +10,8 @@ from typing import Tuple, Optional, Callable
 
 logger = logging.getLogger("TetrisEnhanced.UI")
 
-classUIColor:
+
+class UIColor:
     """Color constants for the UI"""
     # Основные цвета
     BLACK = (0, 0, 0)
