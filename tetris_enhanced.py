@@ -3016,7 +3016,7 @@ def draw_panel(surf, origin_x, origin_y, state: GameState, font, small, audio: A
     # Меньшие мини-фигуры для более компактного вида
     for i, kind in enumerate(state.next_queue[:5]):
         mini_y = ny + i * 55  # Меньший интервал
-        draw_mini_compact(surf, origin_x + 5, mini_y, kind, small, next_section_width)
+        draw_mini(surf, origin_x + 5, mini_y, kind, small, compact=True)
     
     # Кнопки с описаниями справа - расширяем и добавляем больше информации
     buttons_x = origin_x + next_section_width + 15
@@ -3062,11 +3062,11 @@ def draw_panel(surf, origin_x, origin_y, state: GameState, font, small, audio: A
     hold_rect = pygame.Rect(origin_x + 5, hold_y, next_section_width, 70)
     draw_gradient_rect(surf, hold_rect, (30, 35, 45), (25, 30, 38))
     pygame.draw.rect(surf, (50, 60, 75), hold_rect, 1, border_radius=6)
-    
+
     hold_title = small.render("РЕЗЕРВ", True, ACCENT_SECONDARY)
     surf.blit(hold_title, (origin_x + 10, hold_y + 5))
-    
-    draw_mini_compact(surf, origin_x + 5, hold_y + 20, state.hold, small, next_section_width)
+
+    draw_mini(surf, origin_x + 5, hold_y + 20, state.hold, small, compact=True)
     
     # Управление и музыка внизу
     help_y = hold_y + 80  # Под hold секцией
@@ -3100,110 +3100,77 @@ def draw_panel(surf, origin_x, origin_y, state: GameState, font, small, audio: A
         music_text = small.render(f"♪ {music_name}", True, ACCENT_SECONDARY)
         surf.blit(music_text, (origin_x + 5, music_y))
 
-def draw_mini_compact(surf, origin_x, origin_y, kind: Optional[str], small, width):
-    """Отрисовка компактной мини-фигуры для вертикального столбца"""
-    box = pygame.Rect(origin_x, origin_y, width, 50)  # Меньшая высота для компактности
-    
-    # Основной фон с градиентом
-    draw_gradient_rect(surf, box, (35, 40, 50), (25, 30, 38))
-    pygame.draw.rect(surf, (60, 70, 85), box, 1, border_radius=4)
-    
+
+def draw_mini(surf, origin_x, origin_y, kind: Optional[str], small, compact: bool = False):
+    """
+    Отрисовка мини-фигуры (next/hold).
+
+    Args:
+        compact: Если True, использует компактный режим для вертикального столбца
+    """
+    if compact:
+        box = pygame.Rect(origin_x, origin_y, 60, 50)
+        scale = 12
+        padding = 5
+        corner_radius = 4
+    else:
+        box = pygame.Rect(origin_x, origin_y, PANEL_W-10, 80)
+        scale = 18
+        padding = 10
+        corner_radius = 8
+
+    # Фон
+    if compact:
+        draw_gradient_rect(surf, box, (35, 40, 50), (25, 30, 38))
+        pygame.draw.rect(surf, (60, 70, 85), box, 1, border_radius=corner_radius)
+    else:
+        draw_enhanced_panel(surf, box)
+
     if not kind:
-        # Пустое место
         empty_text = small.render("Пусто", True, DIM)
         text_x = box.x + (box.width - empty_text.get_width()) // 2
         text_y = box.y + (box.height - empty_text.get_height()) // 2
         surf.blit(empty_text, (text_x, text_y))
         return
-    
+
     grid = ROTATED[kind][0]
     cells = [(i, j) for j in range(4) for i in range(4) if grid[j][i] != '.']
     if not cells:
         return
-    
+
     minx = min(i for i, _ in cells)
     maxx = max(i for i, _ in cells)
     miny = min(j for _, j in cells)
     maxy = max(j for _, j in cells)
     w = maxx - minx + 1
     h = maxy - miny + 1
-    scale = 12  # Меньший масштаб для компактности
-    offset_x = origin_x + 5 + (width - 10 - w*scale) // 2
-    offset_y = origin_y + 5 + (40 - h*scale) // 2
-    
+
+    box_height = 50 if compact else 80
+    box_width = 60 if compact else PANEL_W - 10
+    offset_x = origin_x + padding + (box_width - padding*2 - w*scale) // 2
+    offset_y = origin_y + padding + (box_height - padding*2 - h*scale) // 2
+
     for i, j in cells:
         x = (i - minx) * scale
         y = (j - miny) * scale
-        rect = pygame.Rect(offset_x + x, offset_y + y, scale-1, scale-1)
-        
-        # Мини-версия блока с отблесками
+        cell_size = scale - (1 if compact else 2)
+        rect = pygame.Rect(offset_x + x, offset_y + y, cell_size, cell_size)
+
         color = COLORS[kind]
-        mini_corner_radius = 2
-        
-        # Основная заливка цветом
+        mini_corner_radius = 2 if compact else 3
+
         pygame.draw.rect(surf, color, rect, border_radius=mini_corner_radius)
-        
-        # Мини-отблеск
-        if scale > 8:  # Только если блок достаточно большой
-            highlight_size = max(1, scale//6)
-            highlight_rect = pygame.Rect(offset_x + x + 1, offset_y + y + 1, highlight_size, highlight_size)
-            highlight_color = tuple(min(255, c + 60) for c in color)
-            pygame.draw.rect(surf, highlight_color, highlight_rect, border_radius=1)
-        
+
+        # Отблеск
+        highlight_size = max(1 if compact else 2, scale//6 if compact else scale//4)
+        highlight_rect = pygame.Rect(offset_x + x + 1, offset_y + y + 1, highlight_size, highlight_size)
+        highlight_color = tuple(min(255, c + (60 if compact else 80)) for c in color)
+        pygame.draw.rect(surf, highlight_color, highlight_rect, border_radius=1)
+
         # Рамка
-        border_color = tuple(max(0, c - 30) for c in color)
+        border_color = tuple(max(0, c - (30 if compact else 40)) for c in color)
         pygame.draw.rect(surf, border_color, rect, 1, border_radius=mini_corner_radius)
 
-def draw_mini(surf, origin_x, origin_y, kind: Optional[str], small):
-    box = pygame.Rect(origin_x, origin_y, PANEL_W-10, 80)
-    
-    # Улучшенный фон с градиентом
-    draw_enhanced_panel(surf, box)
-    
-    if not kind:
-        # Пустое место
-        empty_text = small.render("Пусто", True, DIM)
-        text_x = box.x + (box.width - empty_text.get_width()) // 2
-        text_y = box.y + (box.height - empty_text.get_height()) // 2
-        surf.blit(empty_text, (text_x, text_y))
-        return
-    
-    grid = ROTATED[kind][0]
-    cells = [(i, j) for j in range(4) for i in range(4) if grid[j][i] != '.']
-    if not cells:
-        return
-    
-    minx = min(i for i, _ in cells)
-    maxx = max(i for i, _ in cells)
-    miny = min(j for _, j in cells)
-    maxy = max(j for _, j in cells)
-    w = maxx - minx + 1
-    h = maxy - miny + 1
-    scale = 18  # Немного меньше для лучшего вида
-    offset_x = origin_x + 10 + (PANEL_W - 20 - w*scale) // 2
-    offset_y = origin_y + 8 + (80 - 16 - h*scale) // 2
-    
-    for i, j in cells:
-        x = (i - minx) * scale
-        y = (j - miny) * scale
-        rect = pygame.Rect(offset_x + x, offset_y + y, scale-2, scale-2)
-        
-        # Мини-версия блока с отблесками и закругленными углами
-        color = COLORS[kind]
-        mini_corner_radius = 3  # Меньший радиус для мини-блоков
-        
-        # Основная заливка цветом
-        pygame.draw.rect(surf, color, rect, border_radius=mini_corner_radius)
-        
-        # Мини-отблеск
-        highlight_size = max(2, scale//4)
-        highlight_rect = pygame.Rect(offset_x + x + 1, offset_y + y + 1, highlight_size, highlight_size)
-        highlight_color = tuple(min(255, c + 80) for c in color)
-        pygame.draw.rect(surf, highlight_color, highlight_rect, border_radius=1)
-        
-        # Рамка с закругленными углами
-        border_color = tuple(max(0, c - 40) for c in color)
-        pygame.draw.rect(surf, border_color, rect, 1, border_radius=mini_corner_radius)
 
 # -------------------- Game Mode Functions --------------------
 
