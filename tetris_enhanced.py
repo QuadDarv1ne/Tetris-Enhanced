@@ -5515,6 +5515,10 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
         print("[Game] Switching to game music context")
         audio.set_context('game')
 
+    # Кэширование поверхностей для оптимизации
+    ghost_cache = None
+    ghost_cache_key = None
+
     while True:
         dt = clock.tick(FPS) / 1000.0
         for ev in pygame.event.get():
@@ -5796,6 +5800,8 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
                 state.current.y = state.hard_drop_target_y
                 # finalize lock
                 lock_piece(state)
+                ghost_cache = None  # Сброс кэша ghost
+                ghost_cache_key = None
                 state.hard_drop_anim = False
                 fall_accum = 0.0
             else:
@@ -5821,6 +5827,8 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
 
         if state.current is None:
             spawn_next(state)
+            ghost_cache = None  # Сброс кэша ghost
+            ghost_cache_key = None
             # Полный сброс всех состояний при создании новой фигуры
             input_state.reset_all()
 
@@ -5848,6 +5856,8 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
                 else:
                     # lock
                     cleared = lock_piece(state)
+                    ghost_cache = None  # Сброс кэша ghost
+                    ghost_cache_key = None
                     if cleared > 0:
                         audio.play_sfx('line')
                         score_lines(state, cleared, 'none')
@@ -5867,9 +5877,14 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
         draw_enhanced_background(screen)
         draw_grid(screen, ORIGIN_X, ORIGIN_Y, state)
         if state.current:
-            ghost = ghost_position(state)
-            if ghost is not None:
-                draw_piece(screen, ORIGIN_X, ORIGIN_Y, ghost, ghost=True)
+            # Кэшируем ghost position на кадр
+            current_ghost_key = (state.current.x, state.current.y, state.current.r, state.current.kind)
+            if ghost_cache is None or current_ghost_key != ghost_cache_key:
+                ghost_cache = ghost_position(state)
+                ghost_cache_key = current_ghost_key
+            
+            if ghost_cache is not None:
+                draw_piece(screen, ORIGIN_X, ORIGIN_Y, ghost_cache, ghost=True)
             # if animating hard-drop, draw the current piece at intermediate y
             if getattr(state, 'hard_drop_anim', False) and hasattr(state, '_anim_draw_y'):
                 temp_piece = Piece(state.current.kind, state.current.x, state._anim_draw_y, state.current.r)
