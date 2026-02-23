@@ -2151,6 +2151,12 @@ def score_lines(state: GameState, lines: int, tspin: str):
                 field_center_x = ORIGIN_X + PLAY_W // 2
                 effect_y = ORIGIN_Y + 100
                 particle_system.emit_at(field_center_x, effect_y, 'level_up')
+        
+        # Particle effect for combo
+        if PARTICLES_ENABLED and state.combo > 1:
+            field_center_x = ORIGIN_X + PLAY_W // 2
+            effect_y = ORIGIN_Y + 150
+            particle_system.emit_at(field_center_x, effect_y, 'combo')
     else:
         state.combo = -1
         state.back_to_back = False
