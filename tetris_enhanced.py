@@ -2475,16 +2475,30 @@ class AudioManager:
         # Воспроизводим музыку
         if self.playlist:
             self.play_current()
-    
+
     def get_current_playlist(self):
         """Get the current playlist."""
         return self.playlist
-    
+
     def set_current_index(self, index):
         """Set the current track index."""
         if 0 <= index < len(self.playlist):
             self.index = index
             self.play_current()
+
+    def play_sfx(self, name: str):
+        """Воспроизводит звуковой эффект по имени."""
+        if not self.enabled:
+            return
+        
+        # Путь к файлам эффектов
+        sfx_path = os.path.join("sounds", f"{name}.wav")
+        if os.path.isfile(sfx_path):
+            try:
+                sound = pygame.mixer.Sound(sfx_path)
+                sound.play()
+            except Exception as e:
+                print(f"[Audio] Failed to play SFX '{name}': {e}")
 
 # -------------------- Smooth Animation Utilities --------------------
 def smooth_lerp(start, end, t):
