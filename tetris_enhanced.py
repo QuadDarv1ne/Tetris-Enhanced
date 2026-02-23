@@ -2119,20 +2119,28 @@ def score_lines(state: GameState, lines: int, tspin: str):
 def clear_lines(state: GameState) -> int:
     """
     Очищает все заполненные линии с игрового поля.
-    
-    Удаляет все строки, где все клетки заняты, а сверху добавляет пустые строки.
-    
+    Оптимизированная версия — модифицирует grid на месте.
+
     Args:
         state: Текущее состояние игры
-        
+
     Returns:
         Количество очищенных линий
     """
-    new_grid = [row for row in state.grid if any(cell is None for cell in row)]
-    cleared = PLAY_ROWS - len(new_grid)
-    while len(new_grid) < PLAY_ROWS:
-        new_grid.insert(0, [None for _ in range(PLAY_COLS)])
-    state.grid = new_grid
+    cleared = 0
+    write_idx = PLAY_ROWS - 1
+    
+    for read_idx in range(PLAY_ROWS - 1, -1, -1):
+        if any(cell is None for cell in state.grid[read_idx]):
+            state.grid[write_idx] = state.grid[read_idx]
+            write_idx -= 1
+        else:
+            cleared += 1
+    
+    while write_idx >= 0:
+        state.grid[write_idx] = [None for _ in range(PLAY_COLS)]
+        write_idx -= 1
+    
     return cleared
 
 def refill_bag(state: GameState):
