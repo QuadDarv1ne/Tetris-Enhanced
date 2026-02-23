@@ -82,6 +82,17 @@ except ImportError:
     logger.error("This script requires pygame. Install with: pip install pygame")
     raise
 
+# Import particle system
+try:
+    from game import init_particle_system
+    particle_system = init_particle_system(max_particles=2000)
+    PARTICLES_ENABLED = True
+    logger.info("Particle system initialized")
+except Exception as e:
+    logger.warning(f"Particle system not available: {e}")
+    particle_system = None
+    PARTICLES_ENABLED = False
+
 # -------------------- Централизованная конфигурация игры --------------------
 
 @dataclass
@@ -2018,10 +2029,10 @@ def collides(state: GameState, piece: Piece) -> bool:
 def lock_piece(state: GameState):
     """
     Фиксирует текущую фигуру на стакане и очищает заполненные линии.
-    
+
     Args:
         state: Текущее состояние игры
-        
+
     Returns:
         Количество очищенных линий
     """
@@ -2033,6 +2044,29 @@ def lock_piece(state: GameState):
             return 0
         state.grid[y][x] = state.current.kind
     cleared = clear_lines(state)
+    
+    # Check for T-spin before resetting state
+    tspin = 'none'
+    if state.current and state.current.kind == 'T':
+        tspin = is_t_spin(state, state.current, kicked=False)
+    
+    # Particle effects for line clears
+    if PARTICLES_ENABLED and cleared > 0:
+        # Calculate position for particle effects
+        field_center_x = ORIGIN_X + PLAY_W // 2
+        # Find the highest cleared line (rough estimate)
+        effect_y = ORIGIN_Y + PLAY_H - 50
+        
+        # T-spin effect
+        if tspin == 'tspin':
+            particle_system.emit_at(field_center_x, effect_y, 't_spin')
+        
+        particle_system.emit_line_clear(field_center_x, effect_y, PLAY_W, cleared)
+        
+        # Special effect for Tetris (4 lines)
+        if cleared == 4 and tspin != 'tspin':
+            particle_system.emit_at(field_center_x, effect_y, 'tetris')
+    
     state.can_hold = True
     state.current = None
     # Полный сброс состояния анимации при блокировке
@@ -2108,8 +2142,15 @@ def score_lines(state: GameState, lines: int, tspin: str):
         state.lines += lines
         new_level = state.lines // 10 + 1
         if new_level > state.level:
+            old_level = state.level
             state.level = new_level
             state.fall_interval = gravity_for_level(state.level)
+            
+            # Particle effect for level up
+            if PARTICLES_ENABLED and new_level > old_level:
+                field_center_x = ORIGIN_X + PLAY_W // 2
+                effect_y = ORIGIN_Y + 100
+                particle_system.emit_at(field_center_x, effect_y, 'level_up')
     else:
         state.combo = -1
         state.back_to_back = False
@@ -5898,7 +5939,7 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
             if ghost_cache is None or current_ghost_key != ghost_cache_key:
                 ghost_cache = ghost_position(state)
                 ghost_cache_key = current_ghost_key
-            
+
             if ghost_cache is not None:
                 draw_piece(screen, ORIGIN_X, ORIGIN_Y, ghost_cache, ghost=True)
             # if animating hard-drop, draw the current piece at intermediate y
@@ -5907,7 +5948,12 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
                 draw_piece(screen, ORIGIN_X, ORIGIN_Y, temp_piece, animate_current=True)
             else:
                 draw_piece(screen, ORIGIN_X, ORIGIN_Y, state.current, animate_current=True)
-        
+
+        # Draw particle effects
+        if PARTICLES_ENABLED:
+            particle_system.update(dt)
+            particle_system.draw(screen)
+
         panel_x = ORIGIN_X + PLAY_W + MARGIN
         draw_panel(screen, panel_x, MARGIN, state, font, small, audio)
 

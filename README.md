@@ -2,7 +2,7 @@
 
 [![DOI](https://zenodo.org/badge/1042618379.svg)](https://doi.org/10.5281/zenodo.17264455)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0007--7605--539X-green?logo=orcid&logoColor=white)](https://orcid.org/0009-0007-7605-539X)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENCE)
 
@@ -11,6 +11,15 @@
 Этот репозиторий содержит улучшенную версию игры Tetris на Python (один файл): `tetris_enhanced.py`.
 Игра реализована с использованием библиотеки `pygame` и поддерживает фоновые мелодии, звуковые эффекты,
 сохранение/загрузку состояния и интерактивные меню (стартовое меню выбора уровня и меню паузы).
+
+### ✨ Что нового в версии 2.1.0?
+
+- **🎯 Ежедневные испытания** — новые задания каждый день с наградами
+- **📊 Статистика игрока** — детальная карьерная статистика и история игр
+- **🏆 Таблица лидеров** — локальные рекорды по режимам игры
+- **🎨 Визуальные эффекты** — система частиц для ярких эффектов
+- **👻 Ghost Piece** — призрачная фигура для точного позиционирования
+- **🎮 Интеграция систем** — единый интерфейс для всех систем игры
 
 ### ✨ Что нового в версии 2.0.0?
 
@@ -30,8 +39,14 @@
 - `ui_components.py` — базовые UI компоненты.
 - `config.json` — файл конфигурации.
 
-### Новые модули (v2.0.0)
+### Новые модули (v2.1.0)
 - `game/achievements.py` — система достижений.
+- `game/daily_challenges.py` — ежедневные испытания.
+- `game/player_stats.py` — статистика игрока.
+- `game/leaderboard.py` — таблица лидеров.
+- `game/integration.py` — интеграция всех систем.
+- `game/particles.py` — система частиц.
+- `game/state_manager.py` — менеджер состояний игры.
 - `ui/advanced_components.py` — продвинутые UI компоненты.
 - `utils/logger.py` — улучшенная система логирования.
 - `utils/performance.py` — монитор производительности и кэширование.
@@ -243,6 +258,12 @@ button.draw(screen)
 Tetris Enhanced/
 ├── game/                      # Игровые модули
 │   ├── achievements.py        # Система достижений
+│   ├── daily_challenges.py    # Ежедневные испытания
+│   ├── player_stats.py        # Статистика игрока
+│   ├── leaderboard.py         # Таблица лидеров
+│   ├── integration.py         # Интеграция систем
+│   ├── particles.py           # Система частиц
+│   ├── state_manager.py       # Менеджер состояний
 │   └── __init__.py
 ├── ui/                        # UI компоненты
 │   ├── advanced_components.py # Продвинутые виджеты
@@ -289,8 +310,8 @@ Tetris Enhanced/
 
 ---
 
-**Дата выпуска версии 2.0:** 23 февраля 2026 г.
+**Дата выпуска версии 2.1:** 23 февраля 2026 г.
 
-**Версия:** 2.0.0
+**Версия:** 2.1.0
 
 [![Star History Chart](https://api.star-history.com/svg?repos=QuadDarv1ne/Tetris-Enhanced&type=Date)](https://star-history.com/#QuadDarv1ne/Tetris-Enhanced&Date)
