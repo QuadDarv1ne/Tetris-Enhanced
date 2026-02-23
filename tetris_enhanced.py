@@ -62,6 +62,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
+from collections import OrderedDict
 
 # Configure logging
 logging.basicConfig(
@@ -1215,9 +1216,9 @@ class AdvancedResponsiveDesign:
         return layout_info
 
 # Кэширование для оптимизации производительности
-_font_cache = {}
-_surface_cache = {}
-_adaptive_font_cache = {}
+_font_cache: OrderedDict = OrderedDict()
+_surface_cache: OrderedDict = OrderedDict()
+_adaptive_font_cache: dict = {}
 
 # Глобальная переменная для адаптивного дизайна
 responsive = None
@@ -1272,12 +1273,11 @@ def get_cached_font(font_name: str, size: int, bold: bool = False) -> pygame.fon
                 # Фолбэк на стандартный шрифт
                 _font_cache[cache_key] = pygame.font.Font(None, scaled_size)
         
-        # Ограничиваем размер кэша
+        # Ограничиваем размер кэша с помощью O(1) операции
         if len(_font_cache) > 50:
-            # Удаляем старые шрифты
-            oldest_keys = list(_font_cache.keys())[:10]
-            for old_key in oldest_keys:
-                del _font_cache[old_key]
+            # Удаляем 10 oldest элементов через popitem(last=False) - O(1)
+            for _ in range(10):
+                _font_cache.popitem(last=False)
     
     return _font_cache[cache_key]
 
@@ -1286,13 +1286,12 @@ def get_cached_text_surface(text: str, font: pygame.font.Font, color: tuple) -> 
     cache_key = f"{text}_{font.get_height()}_{color[0]}_{color[1]}_{color[2]}"
     if cache_key not in _surface_cache:
         _surface_cache[cache_key] = font.render(text, True, color)
-        
-        # Ограничиваем размер кэша
+
+        # Ограничиваем размер кэша с помощью O(1) операции
         if len(_surface_cache) > 100:
-            oldest_keys = list(_surface_cache.keys())[:20]
-            for old_key in oldest_keys:
-                del _surface_cache[old_key]
-    
+            for _ in range(20):
+                _surface_cache.popitem(last=False)
+
     return _surface_cache[cache_key]
 
 def clear_performance_caches():
@@ -1301,6 +1300,9 @@ def clear_performance_caches():
     _font_cache.clear()
     _surface_cache.clear()
     _adaptive_font_cache.clear()
+    # Пересоздаём OrderedDict для сброса internal order
+    _font_cache = OrderedDict()
+    _surface_cache = OrderedDict()
 
 WIDTH, HEIGHT = 1200, 800 # Увеличиваем размер экрана для лучшего размещения
 PLAY_COLS, PLAY_ROWS = 10, 20 
