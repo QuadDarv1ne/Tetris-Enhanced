@@ -1772,7 +1772,7 @@ class InputState:
 class Piece:
     """
     Класс, представляющий тетромино (фигуру) на игровом поле.
-    
+
     Attributes:
         kind: Тип тетромино ('I', 'O', 'T', 'S', 'Z', 'J', 'L')
         x: Позиция по оси X (столбец)
@@ -1783,12 +1783,13 @@ class Piece:
     x: int
     y: int
     r: int = 0
+    _cells_cache: Optional[List[Tuple[int, int]]] = None
 
     @property
     def grid(self) -> List[str]:
         """
         Возвращает матрицу 4x4 для текущего состояния поворота.
-        
+
         Returns:
             Матрица 4x4 как список строк
         """
@@ -1797,17 +1798,26 @@ class Piece:
     def cells(self) -> List[Tuple[int, int]]:
         """
         Возвращает список координат всех занятых клеток тетромино.
-        
+        Кэширует результат для оптимизации производительности.
+
         Returns:
             Список кортежей (x, y) для каждой занятой клетки
         """
+        if self._cells_cache is not None:
+            return self._cells_cache
+        
         cells = []
         g = self.grid
         for j in range(4):
             for i in range(4):
                 if g[j][i] != '.':
                     cells.append((self.x + i, self.y + j))
+        self._cells_cache = cells
         return cells
+
+    def invalidate_cache(self):
+        """Сбрасывает кэш ячеек при изменении позиции или поворота"""
+        self._cells_cache = None
 
 @dataclass
 class GameState:
@@ -1984,18 +1994,20 @@ def spawn_x(kind: str) -> int:
 def collides(state: GameState, piece: Piece) -> bool:
     """
     Проверяет, сталкивается ли фигура с границами стакана или другими фигурами.
-    
+    Оптимизированная версия с кэшированием ячеек.
+
     Args:
         state: Текущее состояние игры
         piece: Фигура для проверки
-        
+
     Returns:
         True, если есть столкновение, иначе False
     """
+    grid = state.grid
     for x, y in piece.cells():
         if x < 0 or x >= PLAY_COLS or y >= PLAY_ROWS:
             return True
-        if y >= 0 and state.grid[y][x] is not None:
+        if y >= 0 and grid[y][x] is not None:
             return True
     return False
 
