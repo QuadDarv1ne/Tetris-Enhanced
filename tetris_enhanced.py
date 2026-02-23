@@ -3300,104 +3300,30 @@ def ensure_save_directory():
         print(f'Создана папка для сохранений: {SAVE_DIR}')
 
 def save_game(state: GameState, filename: str = SAVE_FILE):
+    """Сохраняет состояние игры в JSON файл."""
     try:
-        ensure_save_directory()  # Убеждаемся, что папка существует
+        ensure_save_directory()
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
-        print('Игра сохранена в', filename)
+        print(f'Игра сохранена в {filename}')
+        return True
     except Exception as e:
-        print('Ошибка сохранения:', e)
+        print(f'Ошибка сохранения: {e}')
+        return False
 
 def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
+    """Загружает состояние игры из JSON файла."""
     if not os.path.isfile(filename):
-        print('Файл сохранения не найден:', filename)
+        print(f'Файл сохранения не найден: {filename}')
         return None
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             d = json.load(f)
         state = GameState.from_dict(d)
-        print('Игра загружена из', filename)
+        print(f'Игра загружена из {filename}')
         return state
     except Exception as e:
-        print('Ошибка загрузки:', e)
-        return None
-
-def save_game_state(state, filename="saves/tetris_save.json"):
-    """Сохраняет состояние игры в JSON файл."""
-    try:
-        # Создаем папку saves если её нет
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
-        # Подготавливаем данные для сохранения
-        save_data = {
-            "grid": state.grid,
-            "bag": state.bag,
-            "next_queue": state.next_queue,
-            "current": {
-                "kind": state.current.kind,
-                "x": state.current.x,
-                "y": state.current.y,
-                "rotation": state.current.rotation
-            } if state.current else None,
-            "hold": {
-                "kind": state.hold.kind,
-                "rotation": state.hold.rotation
-            } if state.hold else None,
-            "score": state.score,
-            "level": state.level,
-            "lines": state.lines,
-            "combo": state.combo,
-            "back_to_back": state.back_to_back,
-            "timestamp": time.time()
-        }
-        
-        # Сохраняем в файл
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(save_data, f, indent=2, ensure_ascii=False)
-        
-        print(f"[Save] Game state saved to {filename}")
-        return True
-        
-    except Exception as e:
-        print(f"[Save] Error saving game state: {e}")
-        return False
-
-def load_game_state(filename="saves/tetris_save.json"):
-    """Загружает состояние игры из JSON файла."""
-    try:
-        # Проверяем существование файла
-        if not os.path.exists(filename):
-            print(f"[Load] Save file {filename} not found")
-            return None
-        
-        # Загружаем данные
-        with open(filename, 'r', encoding='utf-8') as f:
-            save_data = json.load(f)
-        
-        # Проверяем минимально необходимые поля
-        required_fields = ["grid", "bag", "next_queue", "score", "level", "lines"]
-        for field in required_fields:
-            if field not in save_data:
-                raise ValueError(f"Missing required field in save file: {field}")
-        
-        # Проверяем целостность данных
-        if not isinstance(save_data["grid"], list) or len(save_data["grid"]) != 20:
-            raise ValueError("Invalid grid data in save file")
-        
-        if not isinstance(save_data["bag"], list) or not all(isinstance(x, int) for x in save_data["bag"]):
-            raise ValueError("Invalid bag data in save file")
-        
-        print(f"[Load] Game state loaded from {filename}")
-        return save_data
-        
-    except json.JSONDecodeError as e:
-        print(f"[Load] Invalid JSON in save file: {e}")
-        return None
-    except ValueError as e:
-        print(f"[Load] Invalid save data: {e}")
-        return None
-    except Exception as e:
-        print(f"[Load] Error loading game state: {e}")
+        print(f'Ошибка загрузки: {e}')
         return None
 
 # -------------------- Menus --------------------
