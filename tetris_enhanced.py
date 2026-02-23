@@ -2067,16 +2067,21 @@ def is_t_spin(state: GameState, piece: Piece, kicked: bool) -> str:
         return 'tspin'
     return 'none'
 
+# Таблицы очков для оптимизации
+_LINE_SCORES = {1: 100, 2: 300, 3: 500, 4: 800}
+_TSPIN_SCORES = {1: 400, 2: 700, 3: 100}
+
 def score_lines(state: GameState, lines: int, tspin: str):
     """
     Начисляет очки за очищенные линии и обновляет статистику игры.
-    
+    Оптимизированная версия с lookup таблицами.
+
     Очки зависят от:
     - Количества очищенных линий
     - Наличия T-спина
     - Комбо (последовательные очистки)
     - Back-to-Back бонуса (за тетрисы и T-спины подряд)
-    
+
     Args:
         state: Текущее состояние игры
         lines: Количество очищенных линий
@@ -2084,22 +2089,10 @@ def score_lines(state: GameState, lines: int, tspin: str):
     """
     pts = 0
     if tspin != 'none':
-        if lines == 1:
-            pts = 400
-        elif lines == 2:
-            pts = 700
-        else:
-            pts = 100
+        pts = _TSPIN_SCORES.get(lines, 0)
         b2b_candidate = True
     else:
-        if lines == 1:
-            pts = 100
-        elif lines == 2:
-            pts = 300
-        elif lines == 3:
-            pts = 500
-        elif lines >= 4:
-            pts = 800
+        pts = _LINE_SCORES.get(lines, 0)
         b2b_candidate = (lines >= 4)
 
     if lines > 0:
@@ -2113,8 +2106,9 @@ def score_lines(state: GameState, lines: int, tspin: str):
         else:
             state.back_to_back = False
         state.lines += lines
-        if state.lines // 10 + 1 > state.level:
-            state.level = state.lines // 10 + 1
+        new_level = state.lines // 10 + 1
+        if new_level > state.level:
+            state.level = new_level
             state.fall_interval = gravity_for_level(state.level)
     else:
         state.combo = -1
