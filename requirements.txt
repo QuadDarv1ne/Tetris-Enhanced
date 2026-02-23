@@ -1,4 +1,9 @@
-pygame
-numpy
-pillow
-psutil
+# Core dependencies
+pygame>=2.5.0
+numpy>=1.24.0
+pillow>=10.0.0
+psutil>=5.9.0
+
+# Optional dependencies
+# pygame-menu>=4.2.0  # For enhanced menus (future feature)
+# pyinstaller>=6.0.0  # For building executable

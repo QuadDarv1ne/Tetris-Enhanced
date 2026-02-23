@@ -1,0 +1,75 @@
+{
+  "particles": {
+    "enabled": true,
+    "max_particles": 2000,
+    "quality": "high",
+    "effects": {
+      "line_clear": {
+        "enabled": true,
+        "count": 30,
+        "lifetime_multiplier": 1.0
+      },
+      "tetris": {
+        "enabled": true,
+        "count": 100,
+        "lifetime_multiplier": 1.0
+      },
+      "combo": {
+        "enabled": true,
+        "count": 50,
+        "lifetime_multiplier": 1.0
+      },
+      "drop": {
+        "enabled": true,
+        "count": 15,
+        "lifetime_multiplier": 1.0
+      },
+      "rotate": {
+        "enabled": true,
+        "count": 8,
+        "lifetime_multiplier": 1.0
+      },
+      "t_spin": {
+        "enabled": true,
+        "count": 60,
+        "lifetime_multiplier": 1.0
+      },
+      "level_up": {
+        "enabled": true,
+        "count": 80,
+        "lifetime_multiplier": 1.0
+      },
+      "game_over": {
+        "enabled": true,
+        "count": 40,
+        "lifetime_multiplier": 1.0
+      }
+    }
+  },
+  "achievements": {
+    "enabled": true,
+    "notifications_duration": 5.0,
+    "show_progress": true
+  },
+  "leaderboard": {
+    "enabled": true,
+    "max_entries": 10,
+    "auto_save": true
+  },
+  "performance": {
+    "monitor_enabled": true,
+    "show_fps": false,
+    "fps_target": 60,
+    "auto_adjust_quality": true,
+    "quality_thresholds": {
+      "low_fps": 30,
+      "high_frame_time": 50
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "console_output": true,
+    "file_output": true,
+    "error_reports": true
+  }
+}
