@@ -37,6 +37,23 @@ from .leaderboard import (
     init_leaderboard_manager
 )
 
+from .state_manager import (
+    GameStateType,
+    StateTransition,
+    StateConfig,
+    GameState,
+    MenuState,
+    PlayingState,
+    PausedState,
+    GameOverState,
+    SettingsState,
+    LeaderboardState,
+    AchievementsState,
+    StateManager,
+    get_state_manager,
+    init_state_manager
+)
+
 __all__ = [
     # Achievements
     'AchievementType',
@@ -48,7 +65,7 @@ __all__ = [
     'AchievementsManager',
     'get_achievements_manager',
     'init_achievements_manager',
-    
+
     # Particles
     'ParticleType',
     'EmitterShape',
@@ -58,7 +75,7 @@ __all__ = [
     'ParticleSystem',
     'get_particle_system',
     'init_particle_system',
-    
+
     # Leaderboard
     'GameMode',
     'ScoreEntry',
@@ -66,5 +83,21 @@ __all__ = [
     'PlayerStats',
     'LeaderboardManager',
     'get_leaderboard_manager',
-    'init_leaderboard_manager'
+    'init_leaderboard_manager',
+
+    # State Manager
+    'GameStateType',
+    'StateTransition',
+    'StateConfig',
+    'GameState',
+    'MenuState',
+    'PlayingState',
+    'PausedState',
+    'GameOverState',
+    'SettingsState',
+    'LeaderboardState',
+    'AchievementsState',
+    'StateManager',
+    'get_state_manager',
+    'init_state_manager'
 ]

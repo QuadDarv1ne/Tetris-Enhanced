@@ -16,7 +16,7 @@ class TestResponsiveDesignImprovements(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures before each test method."""
-        from responsive_design import AdvancedResponsiveDesign
+        from tetris_enhanced import AdvancedResponsiveDesign
         self.responsive = AdvancedResponsiveDesign(1920, 1080)
     
     def test_cache_management(self):
