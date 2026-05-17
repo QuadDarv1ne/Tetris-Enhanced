@@ -40,6 +40,17 @@ class UIColor:
     J_COLOR = (0, 0, 255)      # Blue
     L_COLOR = (255, 165, 0)    # Orange
 
+    # Dict mapping piece letters to colors (used by tests and game logic)
+    TETROMINO_COLORS = {
+        'I': I_COLOR,
+        'O': O_COLOR,
+        'T': T_COLOR,
+        'S': S_COLOR,
+        'Z': Z_COLOR,
+        'J': J_COLOR,
+        'L': L_COLOR,
+    }
+
 class Button:
     """A customizable button UI component"""
     

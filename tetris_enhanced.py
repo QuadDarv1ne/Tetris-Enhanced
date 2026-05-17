@@ -435,7 +435,7 @@ class AdvancedResponsiveDesign:
             return "ultra_high"
         elif self.total_pixels >= 2073600:  # 1920x1080+
             return "high"
-        elif self.total_pixels >= 1048576:  # 1024x1024+
+        elif self.total_pixels >= 786432:  # 1024x768+
             return "medium"
         else:
             return "low"
