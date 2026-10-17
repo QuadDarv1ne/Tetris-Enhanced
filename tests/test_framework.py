@@ -492,6 +492,197 @@ class GameLogicTests:
                 assert obj.description is not None
 
 
+# ==================== ТЕСТЫ НАДЕЖНОСТИ ====================
+
+class RobustnessTests:
+    """
+    Тесты надёжности: корректное завершение, атомарное сохранение,
+    отчёты об ошибках.
+
+    Закрепляют поведение, которое трудно проверить «на глаз», но легко
+    сломать при рефакторинге.
+    """
+
+    @staticmethod
+    def test_atomic_save_leaves_no_temp_files():
+        """Сохранение создаёт валидный JSON и не оставляет временных файлов"""
+        import glob
+        import tempfile
+        from tetris_enhanced import new_game, save_game, GameMode
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, 'save.json')
+            state = new_game(1, GameMode.ENDLESS_IMMERSIVE, 1)
+
+            assert save_game(state, target) is True, "save_game должен вернуть True"
+            assert os.path.isfile(target), "файл сохранения не создан"
+
+            with open(target, encoding='utf-8') as f:
+                data = json.load(f)
+            assert 'grid' in data, "в сохранении нет поля grid"
+
+            leftovers = glob.glob(os.path.join(tmp, '.tetris_save_*'))
+            assert leftovers == [], f"остались временные файлы: {leftovers}"
+
+    @staticmethod
+    def test_failed_save_keeps_previous_save_intact():
+        """Сбой сериализации не должен портить уже существующее сохранение"""
+        import glob
+        import tempfile
+        from tetris_enhanced import new_game, save_game, GameMode
+
+        class UnserializableState:
+            """Сериализация падает после начала записи во временный файл."""
+            def to_dict(self):
+                return {'grid': [[0] * 10 for _ in range(20)], 'bad': object()}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, 'save.json')
+            good = new_game(1, GameMode.ENDLESS_IMMERSIVE, 1)
+            assert save_game(good, target) is True
+            before = open(target, 'rb').read()
+
+            # Запись заведомо падает — прежнее сохранение обязано выжить.
+            assert save_game(UnserializableState(), target) is False
+
+            after = open(target, 'rb').read()
+            assert after == before, "испорчено ранее сохранённое состояние"
+
+            leftovers = glob.glob(os.path.join(tmp, '.tetris_save_*'))
+            assert leftovers == [], f"мусор после сбоя не убран: {leftovers}"
+
+    @staticmethod
+    def test_audio_manager_init_enables_music_with_tracks():
+        """
+        Конструктор AudioManager доходит до включения музыки.
+
+        Регрессия: из-за неверного отступа код включения музыки мог
+        «отъехать» из __init__ в другой метод, и тогда enabled всегда False.
+        """
+        import math
+        import struct
+        import wave
+
+        try:
+            import pygame
+        except ImportError:
+            return  # pygame не установлен — тест неприменим
+
+        pygame.init()
+        from tetris_enhanced import AudioManager
+
+        music_dir = 'music'
+        os.makedirs(music_dir, exist_ok=True)
+        track = os.path.join(music_dir, '_test_track_.wav')
+        created = not os.path.exists(track)
+
+        try:
+            if created:
+                with wave.open(track, 'w') as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(8000)
+                    w.writeframes(b''.join(
+                        struct.pack('<h', int(3000 * math.sin(2 * math.pi * 440 * i / 8000)))
+                        for i in range(800)
+                    ))
+
+            audio = AudioManager()
+
+            if not hasattr(audio, 'menu_playlist'):
+                return  # аудиоустройство недоступно — проверять нечего
+
+            assert audio.enabled is True, (
+                "при наличии треков музыка должна включиться "
+                f"(enabled={audio.enabled})"
+            )
+            audio.shutdown()
+        finally:
+            if created and os.path.exists(track):
+                os.remove(track)
+
+    @staticmethod
+    def test_audio_shutdown_is_idempotent():
+        """Повторный shutdown() не должен бросать исключение"""
+        try:
+            import pygame
+        except ImportError:
+            return
+
+        pygame.init()
+        from tetris_enhanced import AudioManager
+
+        audio = AudioManager()
+        audio.shutdown()
+        audio.shutdown()  # второй вызов обязан быть безопасен
+
+        assert audio._shutdown_done is True
+        # Вызов после завершения не должен ронять игру.
+        audio.play_sfx('line')
+        audio.stop_all()
+
+    @staticmethod
+    def test_crash_report_written_with_details():
+        """Отчёт о фатальной ошибке создаётся и содержит диагностику"""
+        from tetris_enhanced import _write_crash_report
+
+        try:
+            raise ValueError('проверочная ошибка')
+        except ValueError as exc:
+            path = _write_crash_report(exc)
+
+        try:
+            assert path is not None, "путь к отчёту не возвращён"
+            assert os.path.isfile(path), "файл отчёта не создан"
+
+            text = open(path, encoding='utf-8').read()
+            assert 'ValueError' in text, "в отчёте нет типа исключения"
+            assert 'Traceback' in text, "в отчёте нет стека вызовов"
+            assert 'проверочная ошибка' in text, "в отчёте нет сообщения"
+        finally:
+            if path and os.path.exists(path):
+                os.remove(path)
+
+    @staticmethod
+    def test_main_exit_codes():
+        """
+        Точка входа возвращает корректные коды:
+        0 — штатный выход, 1 — падение, 130 — Ctrl+C.
+        Отчёт об ошибке пишется только при падении.
+        """
+        import glob
+        import tetris_enhanced as g
+
+        original = g._run_session
+        before = set(glob.glob('error_reports/fatal_*.txt'))
+
+        try:
+            g._run_session = lambda: None
+            assert g.main() == 0, "штатный выход должен вернуть 0"
+
+            def boom():
+                raise RuntimeError('имитация падения')
+
+            g._run_session = boom
+            assert g.main() == 1, "падение должно вернуть 1"
+
+            crashed = set(glob.glob('error_reports/fatal_*.txt')) - before
+            assert len(crashed) == 1, "при падении должен появиться один отчёт"
+
+            g._run_session = lambda: (_ for _ in ()).throw(KeyboardInterrupt())
+            assert g.main() == 130, "Ctrl+C должен вернуть 130"
+
+            after = set(glob.glob('error_reports/fatal_*.txt'))
+            assert after == before | crashed, "Ctrl+C не должен писать отчёт"
+        finally:
+            g._run_session = original
+            for report in set(glob.glob('error_reports/fatal_*.txt')) - before:
+                try:
+                    os.remove(report)
+                except OSError:
+                    pass
+
+
 # ==================== ЗАПУСК ВСЕХ ТЕСТОВ ====================
 
 def run_all_tests(categories: Optional[List[TestCategory]] = None) -> bool:
@@ -512,6 +703,7 @@ def run_all_tests(categories: Optional[List[TestCategory]] = None) -> bool:
         (TestCategory.UI, UIComponentTests),
         (TestCategory.PERFORMANCE, PerformanceTests),
         (TestCategory.UNIT, GameLogicTests),
+        (TestCategory.INTEGRATION, RobustnessTests),
     ]
     
     for category, test_class in all_test_classes:

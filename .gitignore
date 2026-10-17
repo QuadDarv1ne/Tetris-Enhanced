@@ -34,6 +34,15 @@ Thumbs.db
 # Файлы сохранения и временные runtime-файлы
 tetris_save.json
 *.save
+saves/
+# Временные файлы атомарной записи сохранений
+.tetris_save_*
+
+# Артефакты диагностики
+logs/
+error_reports/
+# Дамп аудио, который создаёт SDL при драйвере disk (SDL_AUDIODRIVER=disk)
+sdlaudio.raw
 
 # Музыка и звуковые ресурсы (не коммитить большие бинарные файлы)
 music/

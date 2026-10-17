@@ -56,6 +56,7 @@ import json
 import random
 import time
 import math
+import tempfile
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
@@ -3049,18 +3050,38 @@ SAVE_DIR = 'saves'
 
 def ensure_save_directory():
     """Создаёт папку saves, если её нет."""
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
+    if not os.path.isdir(SAVE_DIR):
+        os.makedirs(SAVE_DIR, exist_ok=True)
         print(f'Создана папка для сохранений: {SAVE_DIR}')
 
 def save_game(state: GameState, filename: str = SAVE_FILE):
+    """
+    Сохраняет состояние игры атомарно: временный файл + os.replace(),
+    чтобы разрыв записи не оставил повреждённое сохранение.
+    """
+    tmp_path = None
     try:
         ensure_save_directory()  # Убеждаемся, что папка существует
-        with open(filename, 'w', encoding='utf-8') as f:
+        directory = os.path.dirname(filename) or '.'
+        fd, tmp_path = tempfile.mkstemp(
+            prefix='.tetris_save_', suffix='.json', dir=directory
+        )
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, filename)
+        tmp_path = None
         print('Игра сохранена в', filename)
     except Exception as e:
         print('Ошибка сохранения:', e)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
     if not os.path.isfile(filename):
@@ -3462,7 +3483,7 @@ def draw_adaptive_button(surface, rect: pygame.Rect, text: str, font, hover=Fals
         try:
             optimal_font = get_cached_font('consolas,dejavusansmono,menlo,monospace', 
                                          optimal_font_size, True)
-        except:
+        except Exception:
             optimal_font = font
     else:
         optimal_font = font
@@ -3574,7 +3595,7 @@ def draw_smart_text_block(surface, text: str, rect: pygame.Rect, base_font_size:
     # Создаем шрифт
     try:
         font = get_cached_font('consolas,dejavusansmono,menlo,monospace', font_size, False)
-    except:
+    except Exception:
         font = pygame.font.Font(None, font_size)
     
     # Разбиваем текст на строки
@@ -3663,7 +3684,7 @@ def draw_enhanced_panel_with_content(surface, rect: pygame.Rect, title: str = ""
             title_surface = title_font.render(title, True, WHITE)
             title_x = title_rect.x + (title_rect.width - title_surface.get_width()) // 2
             surface.blit(title_surface, (title_x, title_rect.y))
-        except:
+        except Exception:
             pass  # Пропускаем при ошибке
         
         current_y += title_height + spacing['spacing']

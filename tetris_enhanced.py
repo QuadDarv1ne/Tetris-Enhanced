@@ -59,6 +59,7 @@ import random
 import time
 import math
 import logging
+import tempfile
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
@@ -2335,6 +2336,12 @@ class AudioManager:
         sounds: Словарь загруженных звуковых эффектов
     """
     def __init__(self):
+        # Кэш звуковых эффектов и флаг завершения должны существовать всегда,
+        # включая случай сбоя инициализации микшера (ранний return ниже).
+        self._sfx_cache = {}
+        self._shutdown_done = False
+        self.enabled = False
+
         # initialize mixer safely
         try:
             pygame.mixer.init()
@@ -2369,8 +2376,9 @@ class AudioManager:
         self.index = 0
         
         # Scan for music files
+        self._ensure_sounds_directory()
         self._scan_music()
-        
+
         if not self.playlist:
             print("[Audio] No music files found")
             self.enabled = False
@@ -2378,12 +2386,28 @@ class AudioManager:
             self.enabled = True
             # Начинаем воспроизведение музыки сразу после создания
             self.play_current()
-    
+
+    def _ensure_sounds_directory(self):
+        """Создаёт директорию sounds/, если её нет."""
+        sounds_dir = "sounds"
+        if not os.path.isdir(sounds_dir):
+            try:
+                os.makedirs(sounds_dir, exist_ok=True)
+                print(f"[Audio] Created sounds directory: {sounds_dir}/ (put .wav files here)")
+            except OSError as e:
+                print(f"[Audio] Sounds directory not found and could not be created: {e}")
+
     def _scan_music(self):
         """Scan for music files in the music directory and categorize them."""
         music_dir = "music"
         if not os.path.isdir(music_dir):
-            print("[Audio] Music directory not found")
+            # Каталог создаётся, а не только сообщается об отсутствии:
+            # пользователю сразу видно, куда положить треки (README).
+            try:
+                os.makedirs(music_dir, exist_ok=True)
+                print(f"[Audio] Created music directory: {music_dir}/ (put .mp3/.ogg/.wav files here)")
+            except OSError as e:
+                print(f"[Audio] Music directory not found and could not be created: {e}")
             return
         
         try:
@@ -2493,15 +2517,65 @@ class AudioManager:
         """Воспроизводит звуковой эффект по имени."""
         if not self.enabled:
             return
-        
+
         # Путь к файлам эффектов
         sfx_path = os.path.join("sounds", f"{name}.wav")
-        if os.path.isfile(sfx_path):
+        if not os.path.isfile(sfx_path):
+            return
+
+        # Загруженный Sound кэшируется: иначе файл читается с диска
+        # при каждом повороте/падении, что даёт рывки на слабом железе.
+        if name not in self._sfx_cache:
             try:
-                sound = pygame.mixer.Sound(sfx_path)
-                sound.play()
+                self._sfx_cache[name] = pygame.mixer.Sound(sfx_path)
             except Exception as e:
-                print(f"[Audio] Failed to play SFX '{name}': {e}")
+                print(f"[Audio] Failed to load SFX '{name}': {e}")
+                return
+
+        try:
+            self._sfx_cache[name].play()
+        except Exception as e:
+            print(f"[Audio] Failed to play SFX '{name}': {e}")
+
+    def stop_all(self):
+        """Останавливает воспроизведение музыки, не закрывая микшер."""
+        if not self.enabled:
+            return
+        try:
+            pygame.mixer.music.stop()
+        except Exception as e:
+            print(f"[Audio] Failed to stop music: {e}")
+
+    def shutdown(self):
+        """
+        Освобождает аудиоресурсы.
+
+        Вызывается при завершении работы игры, чтобы освободить звуковое
+        устройство до pygame.quit(). Повторный вызов безопасен.
+        """
+        if getattr(self, '_shutdown_done', False):
+            return
+        self._shutdown_done = True
+
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+        # Освобождаем Surface'ы звуков до остановки микшера, иначе pygame
+        # выводит предупреждение при сборке мусора.
+        for sound in getattr(self, '_sfx_cache', {}).values():
+            try:
+                sound.stop()
+            except Exception:
+                pass
+        self._sfx_cache.clear()
+
+        try:
+            pygame.mixer.quit()
+        except Exception as e:
+            print(f"[Audio] Failed to shut down mixer: {e}")
+
 
 # -------------------- Smooth Animation Utilities --------------------
 def smooth_lerp(start, end, t):
@@ -3319,21 +3393,47 @@ SAVE_DIR = 'saves'
 
 def ensure_save_directory():
     """Создаёт папку saves, если её нет."""
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
+    # exist_ok=True закрывает гонку: между проверкой exists и созданием
+    # каталог мог появиться (например, вторым экземпляром игры).
+    if not os.path.isdir(SAVE_DIR):
+        os.makedirs(SAVE_DIR, exist_ok=True)
         print(f'Создана папка для сохранений: {SAVE_DIR}')
 
 def save_game(state: GameState, filename: str = SAVE_FILE):
-    """Сохраняет состояние игры в JSON файл."""
+    """
+    Сохраняет состояние игры в JSON файл.
+
+    Запись атомарная: данные сначала пишутся во временный файл в том же
+    каталоге, затем он заменяет целевой одним вызовом os.replace().
+    Это исключает повреждение сохранения, если процесс завершится
+    посреди записи (падение системы, завершение по CI, нехватка места).
+    """
+    tmp_path = None
     try:
         ensure_save_directory()
-        with open(filename, 'w', encoding='utf-8') as f:
+        directory = os.path.dirname(filename) or '.'
+        fd, tmp_path = tempfile.mkstemp(
+            prefix='.tetris_save_', suffix='.json', dir=directory
+        )
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, filename)
+        tmp_path = None
         print(f'Игра сохранена в {filename}')
         return True
     except Exception as e:
         print(f'Ошибка сохранения: {e}')
         return False
+    finally:
+        # Не оставляем мусор, если запись не завершилась заменой.
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 def load_game(filename: str = SAVE_FILE) -> Optional[GameState]:
     """Загружает состояние игры из JSON файла."""
@@ -3707,7 +3807,7 @@ def draw_adaptive_button(surface, rect: pygame.Rect, text: str, font, hover=Fals
         try:
             optimal_font = get_cached_font('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', 
                                          optimal_font_size, True)
-        except:
+        except Exception:
             optimal_font = font
     else:
         optimal_font = font
@@ -3819,10 +3919,10 @@ def draw_smart_text_block(surface, text: str, rect: pygame.Rect, base_font_size:
     # Создаем шрифт
     try:
         font = get_cached_font('arial,verdana,tahoma,calibri,segoeui,roboto,consolas,dejavusansmono,menlo,monospace', font_size, False)
-    except:
+    except Exception:
         try:
             font = pygame.font.SysFont('arial', font_size, False)
-        except:
+        except Exception:
             font = pygame.font.Font(None, font_size)
     
     # Разбиваем текст на строки
@@ -3911,7 +4011,7 @@ def draw_enhanced_panel_with_content(surface, rect: pygame.Rect, title: str = ""
             title_surface = title_font.render(title, True, WHITE)
             title_x = title_rect.x + (title_rect.width - title_surface.get_width()) // 2
             surface.blit(title_surface, (title_x, title_rect.y))
-        except:
+        except Exception:
             pass  # Пропускаем при ошибке
         
         current_y += title_height + spacing['spacing']
@@ -5421,9 +5521,15 @@ def new_game(start_level=1, game_mode=GameMode.ENDLESS_IMMERSIVE, campaign_level
     spawn_next(state)
     return state
 
-def run():
+# Активный экземпляр аудиосистемы; нужен, чтобы освободить ресурсы
+# при завершении работы независимо от способа выхода.
+_active_audio: Optional['AudioManager'] = None
+
+
+def _run_session():
     # Проверяем, нужно ли показывать меню выбора разрешения
     global game_config
+    global _active_audio
     
     # Если конфигурация не загружена или используется стандартное разрешение,
     # показываем меню выбора
@@ -5462,6 +5568,7 @@ def run():
         small = pygame.font.SysFont('consolas,dejavusansmono,menlo,monospace', small_size)
 
     audio = AudioManager()
+    _active_audio = audio
     
     # Запускаем музыку меню сразу после создания AudioManager
     if audio.enabled:
@@ -5527,6 +5634,24 @@ def run():
             continue  # Продолжаем игру с новым разрешением
         elif game_result == 'quit':
             break  # Выходим из игры
+
+
+def run():
+    """
+    Публичная точка входа.
+
+    Гарантирует освобождение аудио и SDL-подсистем при любом способе
+    завершения: штатный выход, необработанное исключение или Ctrl+C.
+    Без этого звуковое устройство может остаться занятым после закрытия игры.
+    """
+    global _active_audio
+    try:
+        _run_session()
+    finally:
+        if _active_audio is not None:
+            _active_audio.shutdown()
+            _active_audio = None
+        pygame.quit()
 
 def run_game_loop(screen, clock, font, small, audio, state, input_state, das, arr, start_level, selected_mode, campaign_level):
     # Переключаемся на игровую музыку при входе в игру
@@ -5916,5 +6041,69 @@ def run_game_loop(screen, clock, font, small, audio, state, input_state, das, ar
 
         pygame.display.flip()
 
+def _write_crash_report(exc: BaseException) -> Optional[str]:
+    """
+    Сохраняет отчёт о фатальной ошибке в error_reports/ и возвращает путь к нему.
+
+    Реализовано на стандартной библиотеке, чтобы не вводить зависимость от
+    utils/, которая требует Python 3.10+.
+    """
+    import traceback
+    import platform
+    from datetime import datetime
+
+    report_dir = "error_reports"
+    try:
+        os.makedirs(report_dir, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = os.path.join(report_dir, f"fatal_{stamp}.txt")
+        stack = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write("=" * 60 + "\n")
+            f.write("ОТЧЁТ О ФАТАЛЬНОЙ ОШИБКЕ\n")
+            f.write("=" * 60 + "\n\n")
+            f.write(f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Тип исключения: {type(exc).__name__}\n")
+            f.write(f"Сообщение: {exc}\n\n")
+            f.write("Стек вызовов:\n" + "-" * 60 + "\n")
+            f.write(stack + "\n")
+            f.write("-" * 60 + "\n\n")
+            f.write("Системная информация:\n")
+            f.write(f"  Python: {sys.version.splitlines()[0]}\n")
+            f.write(f"  Platform: {platform.platform()}\n")
+            f.write(f"  Working dir: {os.getcwd()}\n")
+            try:
+                f.write(f"  Pygame: {pygame.ver}\n")
+            except Exception:
+                f.write("  Pygame: недоступен\n")
+
+        return report_path
+    except Exception as report_error:
+        # Отчёт не должен маскировать исходную ошибку.
+        print(f"[Ошибка] Не удалось записать отчёт об ошибке: {report_error}")
+        return None
+
+
+def main() -> int:
+    """Точка входа: завершает работу корректно и с понятным отчётом при крахе."""
+    try:
+        run()
+    except KeyboardInterrupt:
+        # Ctrl+C — штатный сценарий, отчёт не нужен.
+        print("\n[Игра] Остановлено пользователем (Ctrl+C)")
+        return 130
+    except Exception as exc:
+        logger.exception("Фатальная ошибка во время работы игры")
+        report_path = _write_crash_report(exc)
+        if report_path:
+            print(f"\n[Критическая ошибка] {type(exc).__name__}: {exc}")
+            print(f"Подробный отчёт сохранён: {report_path}")
+        else:
+            print(f"\n[Критическая ошибка] {type(exc).__name__}: {exc}")
+        return 1
+    return 0
+
+
 if __name__ == '__main__':
-    run()
+    sys.exit(main())
