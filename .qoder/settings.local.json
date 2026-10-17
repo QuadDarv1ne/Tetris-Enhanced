@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(DIR=\"M:/GitHub/Tetris Enhanced\" && cd \"$DIR\" && pwd && git branch -a 2>&1)"
+    ]
+  }
+}

@@ -53,7 +53,7 @@
 ## Требования
 
 - Python 3.8+ (рекомендуется 3.10+)
-- pygame >= 2.5.0
+- pygame-ce >= 2.5.0 (pygame-ce используется вместо pygame: он устанавливается без компиляции на Python 3.13/3.14)
 - numpy >= 1.24.0
 - pillow >= 10.0.0
 - psutil >= 5.9.0
@@ -79,7 +79,8 @@ python tetris_enhanced.py
 
 2. **Установите зависимости**
    ```bash
-   pip install pygame numpy pillow psutil
+   pip install pygame-ce numpy pillow psutil
+   
    ```
 
 3. **Настройте игру**

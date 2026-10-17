@@ -1,5 +1,9 @@
 # Core dependencies
-pygame>=2.5.0
+# pygame-ce (Community Edition) is used instead of classic pygame:
+# it is a drop-in replacement with the same `import pygame` API, but ships
+# prebuilt wheels for Python 3.13/3.14, while classic pygame has none
+# (installing it there requires compiling SDL from source).
+pygame-ce>=2.5.0
 numpy>=1.24.0
 pillow>=10.0.0
 psutil>=5.9.0

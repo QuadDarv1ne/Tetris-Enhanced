@@ -13,8 +13,8 @@ TETRIS ENHANCED — улучшенная версия проекта
 
 Установка и запуск:
     1) Убедитесь, что установлен Python 3.7+.
-    2) Установите pygame:
-         pip install pygame
+    2) Установите pygame-ce:
+         pip install pygame-ce
     3) Создайте папки рядом со скриптом:
          music/   - поместите mp3/ogg/wav треки
          sounds/  - поместите wav-файлы эффектов: rotate.wav, drop.wav, line.wav
@@ -49,7 +49,7 @@ Enhanced Tetris (single-file) — pygame
 и wav-эффекты в ./sounds/ (rotate.wav, drop.wav, line.wav)
 
 Запуск:
-    pip install pygame
+    pip install pygame-ce
     python tetris_enhanced.py
 """
 import os
@@ -79,7 +79,10 @@ logger = logging.getLogger("TetrisEnhanced")
 try:
     import pygame
 except ImportError:
-    logger.error("This script requires pygame. Install with: pip install pygame")
+    logger.error(
+        "This script requires pygame. Install with: pip install pygame-ce "
+        "(pygame-ce is used because it ships wheels for Python 3.13/3.14)"
+    )
     raise
 
 # -------------------- Централизованная конфигурация игры --------------------

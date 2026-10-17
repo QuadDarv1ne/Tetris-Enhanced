@@ -31,6 +31,19 @@ def get_version() -> str:
 
 def check_dependencies() -> bool:
     """Проверяет наличие необходимых зависимостей"""
+    # pygame-ce — drop-in замена pygame, импортируется как `pygame`
+    try:
+        import pygame
+        print(f"✓ pygame found: {pygame.version.ver}")
+    except ImportError:
+        print("✗ pygame not found. Installing pygame-ce...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pygame-ce"])
+        except subprocess.CalledProcessError:
+            print("✗ Failed to install pygame-ce. Please install manually:")
+            print("  pip install pygame-ce")
+            return False
+
     try:
         import PyInstaller
         print(f"✓ PyInstaller found: {PyInstaller.__version__}")
@@ -77,6 +90,9 @@ def build_pyinstaller(onefile: bool = True, debug: bool = False):
         "--add-data", "enhanced_config.json;.",
         "--collect-all", "pygame",
         "--hidden-import", "pygame",
+        # pygame-ce keeps the `pygame` import name, so the options above cover it.
+        # pygame._sdl2 is not always picked up by the dependency analyzer.
+        "--hidden-import", "pygame._sdl2",
         "--hidden-import", "numpy",
         "--hidden-import", "PIL",
         "--hidden-import", "psutil",
